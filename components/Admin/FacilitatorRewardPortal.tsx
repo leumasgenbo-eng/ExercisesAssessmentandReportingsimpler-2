@@ -160,6 +160,37 @@ const FacilitatorRewardPortal: React.FC<Props> = ({ data, fullState }) => {
         </div>
       </div>
 
+      {/* MERIT EXPLANATION BLOCK */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-xl group hover:border-indigo-600 transition-all">
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center text-xl mb-6 font-black">01</div>
+            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-4">Curriculum Planning</h4>
+            <p className="text-xs font-bold text-slate-400 uppercase leading-relaxed mb-6">Earn <span className="text-indigo-600">15 points</span> per week for every subject that has a defined Strand and set of Indicators in the Active Broadsheet.</p>
+            <div className="flex justify-between items-center pt-6 border-t border-slate-50">
+               <span className="text-[10px] font-black text-slate-300 uppercase">Value:</span>
+               <span className="text-sm font-black text-indigo-600">+15 PTS</span>
+            </div>
+         </div>
+         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-xl group hover:border-emerald-600 transition-all">
+            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl mb-6 font-black">02</div>
+            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-4">Assessment Logging</h4>
+            <p className="text-xs font-bold text-slate-400 uppercase leading-relaxed mb-6">Earn <span className="text-emerald-600">10 points</span> for every distinct sheet (CW, HW, or PW) that is successfully populated with student scores.</p>
+            <div className="flex justify-between items-center pt-6 border-t border-slate-50">
+               <span className="text-[10px] font-black text-slate-300 uppercase">Value:</span>
+               <span className="text-sm font-black text-emerald-600">+10 PTS</span>
+            </div>
+         </div>
+         <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-xl group hover:border-amber-600 transition-all">
+            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center text-xl mb-6 font-black">03</div>
+            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-4">Exercise Volume</h4>
+            <p className="text-xs font-bold text-slate-400 uppercase leading-relaxed mb-6">Earn <span className="text-amber-600">2 points</span> for every individual exercise column within an assessment sheet. Higher volume = higher rewards.</p>
+            <div className="flex justify-between items-center pt-6 border-t border-slate-50">
+               <span className="text-[10px] font-black text-slate-300 uppercase">Value:</span>
+               <span className="text-sm font-black text-amber-600">+2 PTS/UNIT</span>
+            </div>
+         </div>
+      </div>
+
       {/* INCENTIVE DISTRIBUTION BOX */}
       <div className="bg-white rounded-[3rem] p-10 border-4 border-emerald-500 shadow-2xl no-print relative overflow-hidden">
         <div className="absolute right-0 top-0 p-10 opacity-5 grayscale pointer-events-none">
@@ -169,11 +200,14 @@ const FacilitatorRewardPortal: React.FC<Props> = ({ data, fullState }) => {
            <div className="max-w-xl">
               <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-2 flex items-center gap-3">
                  <span className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl">💰</span>
-                 Cash Incentive Distribution
+                 Incentive Share Explanation
               </h4>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                Enter a total monetary amount to distribute among all facilitators. The system will calculate individual payouts proportional to their merit point contribution to the total institutional pool.
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed mb-4">
+                Enter a fund amount below. The system calculates your individual payout using the Proportional Equity formula:
               </p>
+              <div className="bg-slate-900 p-4 rounded-2xl text-center">
+                 <code className="text-emerald-400 font-mono text-xs uppercase font-black">Individual Payout = (Your Points / Total Pool) × Total Fund</code>
+              </div>
            </div>
            
            <div className="w-full lg:w-96">
@@ -193,44 +227,12 @@ const FacilitatorRewardPortal: React.FC<Props> = ({ data, fullState }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-4 space-y-6">
-           <div className="bg-white rounded-[3rem] p-8 border border-slate-200 shadow-xl">
-              <h4 className="text-lg font-black text-slate-950 uppercase mb-8 flex items-center gap-3">
-                 <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-sm shadow-md">?</span>
-                 How to Earn Points
-              </h4>
-              <div className="space-y-6">
-                 <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black shrink-0">15</div>
-                    <div>
-                       <div className="font-black uppercase text-[11px] text-slate-900">Curriculum Planning</div>
-                       <p className="text-[10px] text-slate-500 leading-relaxed uppercase mt-1 font-bold">Earned every time a Strand or Indicator is defined in the Active Broadsheet for a specific week.</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black shrink-0">10</div>
-                    <div>
-                       <div className="font-black uppercase text-[11px] text-slate-900">Assessment Logging</div>
-                       <p className="text-[10px] text-slate-500 leading-relaxed uppercase mt-1 font-bold">Earned for each distinct Assessment Category (CW, HW, PW) logged with student scores.</p>
-                    </div>
-                 </div>
-                 <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-black shrink-0">2</div>
-                    <div>
-                       <div className="font-black uppercase text-[11px] text-slate-900">Exercise Volume</div>
-                       <p className="text-[10px] text-slate-500 leading-relaxed uppercase mt-1 font-bold">Earned per individual Exercise Unit submitted. Higher volume leads to larger cash share.</p>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
-
         {/* LEADERBOARD TABLE */}
-        <div className="lg:col-span-8 bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden">
+        <div className="lg:col-span-12 bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden">
           <div className="p-8 md:p-12 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-6">
              <div>
                 <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Academic Merit Board</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Live Rankings & Financial Allocation</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Live Rankings & Proportional Financial Allocation</p>
              </div>
              <div className="flex items-center gap-4">
                 <select className="bg-white border-2 border-slate-100 px-6 py-2.5 rounded-xl font-black text-slate-900 text-[10px] uppercase outline-none focus:border-indigo-600" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
@@ -295,40 +297,6 @@ const FacilitatorRewardPortal: React.FC<Props> = ({ data, fullState }) => {
             </table>
           </div>
         </div>
-      </div>
-
-      {/* REWARD GUIDELINE MODAL/CARD */}
-      <div className="bg-slate-950 rounded-[3rem] p-12 text-white shadow-2xl relative overflow-hidden">
-         <div className="absolute left-0 bottom-0 p-12 opacity-5 grayscale pointer-events-none">
-            <span className="text-[15rem] font-black uppercase">GOLD</span>
-         </div>
-         <div className="relative z-10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10 mb-12">
-               <div>
-                  <h4 className="text-3xl font-black uppercase tracking-widest mb-2">Merit Reward Protocol</h4>
-                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-[0.3em]">Institutional Incentive Structure</p>
-               </div>
-               <button onClick={() => window.print()} className="bg-white text-slate-900 px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-2xl hover:scale-105 transition-all">Download Payout Schedule</button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-               <div className="p-8 bg-white/5 border border-white/10 rounded-[2.5rem] group hover:bg-white/10 transition-all">
-                  <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">🎖️</div>
-                  <h5 className="text-sm font-black uppercase text-amber-400 mb-2">Elite Performance</h5>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Top ranking staff qualify for additional base salary bonuses beyond the merit pool.</p>
-               </div>
-               <div className="p-8 bg-white/5 border border-white/10 rounded-[2.5rem] group hover:bg-white/10 transition-all">
-                  <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">📜</div>
-                  <h5 className="text-sm font-black uppercase text-sky-400 mb-2">Merit Certification</h5>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Points correlate directly to the quarterly Academic Stewardship rankings.</p>
-               </div>
-               <div className="p-8 bg-white/5 border border-white/10 rounded-[2.5rem] group hover:bg-white/10 transition-all">
-                  <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">💵</div>
-                  <h5 className="text-sm font-black uppercase text-emerald-400 mb-2">Proportional Payout</h5>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Ensures fair compensation based on actual verified academic contributions.</p>
-               </div>
-            </div>
-         </div>
       </div>
     </div>
   );
