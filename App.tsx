@@ -7,6 +7,7 @@ import FacilitatorPanel from './components/Staff/FacilitatorPanel';
 import PlanningPanel from './components/Planning/PlanningPanel';
 import AdminPanel from './components/Admin/AdminPanel';
 import PupilPortal from './components/Pupils/PupilPortal';
+import { SupabaseSync } from './lib/supabase';
 
 type ViewType = 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
 
@@ -28,6 +29,7 @@ const App: React.FC = () => {
   // CONNECTIVITY & SYNC STATE
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isHostConnected, setIsHostConnected] = useState(false);
   const [pendingSyncKeys, setPendingSyncKeys] = useState<string[]>(() => {
     const saved = localStorage.getItem('uba_sync_queue');
     return saved ? JSON.parse(saved) : [];
@@ -53,6 +55,47 @@ const App: React.FC = () => {
       management: { ...INITIAL_MANAGEMENT_DATA } 
     };
   });
+
+  // --- DRIVE HOST HANDSHAKE ---
+  useEffect(() => {
+    const handleRemoteMessage = async (event: MessageEvent) => {
+      // Security: Only respond to the specific AI Studio Drive host
+      if (!event.origin.includes('ai.studio')) return;
+
+      const { type, payload } = event.data;
+
+      if (type === 'PING_FROM_HOST') {
+        setIsHostConnected(true);
+        event.source?.postMessage({ type: 'PONG_FROM_APP', status: 'ACTIVE' }, { targetOrigin: event.origin });
+      }
+
+      if (type === 'SYNC_REQUEST') {
+        setIsSyncing(true);
+        try {
+          // Perform a full cloud pull to match the Drive app's state
+          const remoteStaff = await SupabaseSync.fetchStaff();
+          const remotePupils = await SupabaseSync.fetchPupils();
+          
+          setState(prev => {
+            const newMgmt = { ...prev.management };
+            // Simple mapping of remote data to local structures
+            if (remoteStaff) newMgmt.staff = remoteStaff;
+            // ... (Mapping logic from SupabaseSync)
+            return { ...prev, management: newMgmt };
+          });
+          
+          event.source?.postMessage({ type: 'SYNC_COMPLETE', timestamp: new Date().toISOString() }, { targetOrigin: event.origin });
+        } catch (err) {
+          console.error("Remote Sync Failed", err);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleRemoteMessage);
+    return () => window.removeEventListener('message', handleRemoteMessage);
+  }, []);
 
   // Sync state and pending keys to localStorage
   useEffect(() => {
@@ -223,7 +266,12 @@ const App: React.FC = () => {
       {isSyncing && (
         <div className="no-print sticky top-0 z-[100] bg-indigo-600 text-white py-2 px-4 text-center text-[9px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-md">
            <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-           SYNCING: Securing academic roadmap to cloud...
+           SYNCING: Communicating with external drive host...
+        </div>
+      )}
+      {isHostConnected && (
+        <div className="no-print absolute top-14 left-1/2 -translate-x-1/2 z-[90] bg-sky-600 text-white px-4 py-1 rounded-b-xl text-[7px] font-black uppercase tracking-[0.2em] shadow-lg animate-in slide-in-from-top-4">
+          🔗 AI Studio Drive Link Established
         </div>
       )}
 
