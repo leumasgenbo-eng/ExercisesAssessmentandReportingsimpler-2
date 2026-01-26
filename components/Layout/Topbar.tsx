@@ -72,8 +72,7 @@ const Topbar: React.FC<TopbarProps> = ({
     { id: 'PUPILS', label: 'Pupil', icon: '🎓' },
     { id: 'PLANNING', label: 'Plan', icon: '📅' },
     { id: 'FACILITATORS', label: 'Staff', icon: '👨‍🏫' },
-    { id: 'ADMIN', label: 'Admin', icon: '⚙️' },
-    { id: 'DRIVE', label: 'Drive', icon: '☁️', url: 'https://ai.studio/apps/drive/12_hFsiSfEl86pBuqsuoH-RBtgvymEJ-p', isExternal: true }
+    { id: 'ADMIN', label: 'Admin', icon: '⚙️' }
   ];
 
   return (
@@ -89,16 +88,10 @@ const Topbar: React.FC<TopbarProps> = ({
               {portalOptions.map((p) => (
                 <button 
                   key={p.id}
-                  onClick={() => {
-                    if (p.isExternal && p.url) {
-                      window.open(p.url, '_blank');
-                    } else {
-                      onViewChange(p.id as any);
-                    }
-                  }}
+                  onClick={() => onViewChange(p.id as any)}
                   className={`px-2 md:px-5 py-1.5 md:py-2 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-lg flex items-center gap-1.5 shrink-0 transition-all select-none ${
                     activeView === p.id ? 'bg-white text-sky-950 shadow-lg' : 'text-sky-300 hover:text-white'
-                  } ${p.isExternal ? 'border border-sky-400/30 bg-sky-900/40' : ''}`}
+                  }`}
                 >
                   <span className="text-[10px] md:text-xs">{p.icon}</span>
                   <span className={`${activeView === p.id ? 'inline' : 'hidden sm:inline'}`}>{p.label}</span>
