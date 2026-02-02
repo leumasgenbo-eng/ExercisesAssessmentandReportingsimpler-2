@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ManagementState, Staff, FacilitatorSubjectMapping, FacilitatorRoleType, EmploymentType, SchoolGroup, AppState, AssessmentData, ExerciseMetadata, InterventionRecord, WeeklyMapping, PlanningRemarks, AssessmentType } from '../types';
 import { SCHOOL_HIERARCHY, SUBJECTS_BY_GROUP, WEEK_COUNT, INTERVENTION_REASONS } from '../constants';
@@ -286,7 +285,8 @@ const FacilitatorPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => 
               <form onSubmit={(e) => {
                 e.preventDefault();
                 if (!newStaffName) return;
-                onUpdate({ ...data, staff: [...data.staff, { id: `s-${Date.now()}`, name: newStaffName, email: newStaffEmail, role: newStaffRole }] });
+                // Fix: Added missing 'category' and 'uniqueCode' properties to satisfy the Staff interface
+                onUpdate({ ...data, staff: [...data.staff, { id: `s-${Date.now()}`, name: newStaffName, email: newStaffEmail, role: newStaffRole, category: 'BASIC_SUBJECT_LEVEL', uniqueCode: '' }] });
                 setNewStaffName(''); setNewStaffEmail('');
               }} className="space-y-3 mb-6">
                 <input className="w-full bg-sky-50 border-none p-4 rounded-xl font-bold text-sky-900 text-xs" placeholder="Full Name..." value={newStaffName} onChange={(e) => setNewStaffName(e.target.value)} />
@@ -524,4 +524,28 @@ const FacilitatorPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => 
                 <h4 className="text-xl font-black uppercase mb-8 border-b border-white/10 pb-4">Institutional Load Avg Ex/Sub</h4>
                 <div className="overflow-x-auto scrollbar-hide">
                    <div className="flex items-end gap-3 h-64 min-w-[800px]">
-                      {Array.from({ length: WEEK_COUNT }, (_, i) =>
+                      {Array.from({ length: WEEK_COUNT }, (_, i) => {
+                         const wkNum = (i + 1).toString();
+                         const wkData = institutionalIntel.weeklyWorkload[wkNum] || { CLASS: 0, HOME: 0, PROJECT: 0 };
+                         const total = wkData.CLASS + wkData.HOME + wkData.PROJECT;
+                         const height = Math.min(100, total * 5);
+                         return (
+                           <div key={wkNum} className="flex-1 flex flex-col items-center gap-2 group/bar">
+                              <div className="w-full bg-white/5 rounded-t-lg transition-all group-hover/bar:bg-white/10 relative" style={{height: `${height}%`}}>
+                                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-sky-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity">{total}</div>
+                              </div>
+                              <span className="text-[8px] font-black text-white/40 uppercase">Wk {wkNum}</span>
+                           </div>
+                         );
+                      })}
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default FacilitatorPanel;

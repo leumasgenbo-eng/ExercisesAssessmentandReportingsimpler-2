@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AssessmentType, SchoolGroup, UserRole } from '../../types';
 import { SCHOOL_HIERARCHY, WEEK_COUNT } from '../../constants';
@@ -35,9 +36,11 @@ const Topbar: React.FC<TopbarProps> = ({
 
   const getPortalOptions = () => {
     switch(userRole) {
-      case 'SUPER_ADMIN':
+      // Fix: Changed 'SUPER_ADMIN' to lowercase 'super_admin' to match UserRole type
+      case 'super_admin':
         return [{ id: 'SUPER_ADMIN', label: 'Global Registry', icon: '🌍' }];
-      case 'SCHOOL_ADMIN':
+      // Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type
+      case 'school_admin':
         return [
           { id: 'HOME', label: 'Home', icon: '🏠' },
           { id: 'ASSESSMENT', label: 'Assess', icon: '📝' },
@@ -46,14 +49,16 @@ const Topbar: React.FC<TopbarProps> = ({
           { id: 'MESSAGES', label: 'Messages', icon: '💬' },
           { id: 'ADMIN', label: 'Identity', icon: '⚙️' }
         ];
-      case 'FACILITATOR':
+      // Fix: Changed 'FACILITATOR' to lowercase 'facilitator' to match UserRole type
+      case 'facilitator':
         return [
           { id: 'HOME', label: 'Home', icon: '🏠' },
           { id: 'ASSESSMENT', label: 'Assess', icon: '📝' },
           { id: 'PLANNING', label: 'Plan', icon: '📅' },
           { id: 'MESSAGES', label: 'Support', icon: '💬' }
         ];
-      case 'PUPIL':
+      // Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type
+      case 'pupil':
         return [{ id: 'PUPILS', label: 'My Performance', icon: '📊' }];
       default:
         return [];
@@ -71,7 +76,8 @@ const Topbar: React.FC<TopbarProps> = ({
               <span className="text-2xl">🏛️</span>
             </div>
 
-            {activeView !== 'HOME' && activeView !== 'SUPER_ADMIN' && userRole !== 'PUPIL' && (
+            {/* Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type */}
+            {activeView !== 'HOME' && activeView !== 'SUPER_ADMIN' && userRole !== 'pupil' && (
               <button onClick={onBack} className="flex items-center justify-center w-12 h-12 bg-white/5 hover:bg-white/10 rounded-2xl shrink-0 border border-white/10 transition-all">
                 <span className="text-lg">⬅️</span>
               </button>
@@ -94,7 +100,8 @@ const Topbar: React.FC<TopbarProps> = ({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-             {userRole !== 'PUPIL' && (
+             {/* Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type */}
+             {userRole !== 'pupil' && (
                <>
                  <div className="hidden md:flex bg-white/5 px-4 py-2 rounded-xl items-center gap-3 border border-white/10">
                     <span className="text-[8px] font-black text-sky-400 uppercase tracking-widest">Term</span>
@@ -144,7 +151,7 @@ const Topbar: React.FC<TopbarProps> = ({
                   className={`shrink-0 px-5 py-2 rounded-full text-[9px] font-black uppercase border-2 transition-all ${
                     activeSchoolGroup === key 
                     ? `bg-indigo-600 border-indigo-600 text-white shadow-lg` 
-                    : 'bg-white border-slate-100 text-slate-300 hover:border-slate-200 hover:text-slate-500'
+                    : `bg-white border-slate-100 text-slate-300 hover:border-slate-200 hover:text-slate-500`
                   }`}
                 >
                   {group.label}

@@ -41,8 +41,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCloudPull = async () => {
     setSyncStatus('FETCHING');
     try {
-      const remoteStaff = await SupabaseSync.fetchStaff();
-      const remotePupils = await SupabaseSync.fetchPupils();
+      // Fix: Added data.settings.hubId as required argument for fetchStaff call to resolve TypeScript error on line 44
+      const remoteStaff = await SupabaseSync.fetchStaff(data.settings.hubId);
+      // Fix: Added data.settings.hubId as required argument for fetchPupils call
+      const remotePupils = await SupabaseSync.fetchPupils(data.settings.hubId);
       const newManagement = { ...data };
       if (remoteStaff.length > 0) newManagement.staff = remoteStaff.map((s: any) => ({ id: s.id.toString(), name: s.name, role: s.role, category: s.category || 'BASIC_SUBJECT_LEVEL', email: s.email, uniqueCode: s.unique_code }));
       if (remotePupils.length > 0) {

@@ -1,7 +1,7 @@
 import { AssessmentData, ManagementState, SchoolGroup, AssessmentType } from './types';
 
-export const SCHOOL_NAME = "UNITED BAYLOR ACADEMY";
-export const SHEET_TITLE = "ASSESSMENT SHEET FOR EXERCISES AND ASSIGNMENT";
+export const SCHOOL_NAME = "UNITED BAYLOR A.";
+export const SHEET_TITLE = "1: Class Assignment/ACTIVITIES";
 export const WEEK_COUNT = 16;
 
 export const SUPER_ADMIN_EMAIL = "leumasgenbo4@gmail.com";
@@ -183,10 +183,9 @@ export const createInitialAssessmentData = (week: string, type: AssessmentType):
 
 export const INITIAL_MANAGEMENT_DATA: ManagementState = {
   settings: {
-    name: "UNITED BAYLOR ACADEMY",
-    /**
-     * slogan is now allowed in types.ts
-     */
+    name: "UNITED BAYLOR A.",
+    institutionalId: "UB-MASTER-001",
+    hubId: "SMA-HQ",
     slogan: "Knowledge is Power",
     address: "P.O. Box GP 123, Accra, Ghana",
     contact: "+233 20 000 0000",
@@ -197,60 +196,20 @@ export const INITIAL_MANAGEMENT_DATA: ManagementState = {
     poorPerformanceFrequency: 3,
     currentTerm: "1ST TERM",
     currentYear: "2024/2025",
-    activeMonth: "MONTH 1",
-    institutionalId: "UB-MASTER-001" // Default Access Key 1
+    activeMonth: "MONTH 1"
   },
   staff: [
-    /**
-     * Fixed: Added missing category property to staff members
-     */
-    { id: 's1', name: 'John Doe', role: 'Teacher', category: 'BASIC_SUBJECT_LEVEL', email: 'john@baylor.edu', uniqueCode: 'FAC-111' }, 
-    { id: 's2', name: 'Jane Smith', role: 'Head of Daycare', category: 'DAYCARE_FACILITATOR', email: 'jane@baylor.edu', uniqueCode: 'FAC-222' },
-    { id: 's3', name: 'Robert Wilson', role: 'HOD Science', category: 'JHS_SPECIALIST', email: 'robert@baylor.edu', uniqueCode: 'FAC-333' }
+    { id: 's1', name: 'John Doe', role: 'facilitator', category: 'BASIC_SUBJECT_LEVEL', email: 'john@baylor.edu', uniqueCode: 'FAC-111' }, 
+    { id: 's2', name: 'Jane Smith', role: 'facilitator', category: 'DAYCARE_FACILITATOR', email: 'jane@baylor.edu', uniqueCode: 'FAC-222' },
+    { id: 's3', name: 'Robert Wilson', role: 'facilitator', category: 'JHS_SPECIALIST', email: 'robert@baylor.edu', uniqueCode: 'FAC-333' }
   ],
   subjects: Array.from(new Set(Object.values(SUBJECTS_BY_GROUP).flat())).map((name, i) => ({
     id: `sub${i + 1}`,
     name
   })),
-  curriculum: [
-    { 
-      id: 'str1', 
-      name: 'Numbers and Algebra', 
-      substrands: [
-        { id: 'ss1', name: 'Linear Equations', indicators: ['M1.1', 'M1.2'] },
-        { id: 'ss2', name: 'Fractions', indicators: ['M2.1'] }
-      ] 
-    }
-  ],
-  mappings: [
-    { id: 'm1', staffId: 's1', subjectId: 'sub3', className: 'Basic 7A', type: 'SUBJECT_BASED', employmentType: 'FULL_TIME' },
-    { id: 'm2', staffId: 's2', subjectId: 'sub1', className: 'Creche 1', type: 'CLASS_BASED', employmentType: 'FULL_TIME' }
-  ],
-  weeklyMappings: [
-    {
-      id: 'wm1',
-      className: 'Basic 7A',
-      subject: 'Mathematics',
-      week: '1',
-      weekStartDate: '2024-01-08',
-      weekEndDate: '2024-01-12',
-      strand: 'Numbers',
-      substrand: 'Fractions',
-      contentStandard: 'B7.1.1.1',
-      indicators: 'M1.1, M1.2',
-      resources: ['Math Textbook 7'],
-      pages: '12-14',
-      areasCovered: 'Introduction to equivalent fractions and simplification.',
-      remarks: 'Completed successfully',
-      classWorkCount: 5,
-      homeWorkCount: 5,
-      projectWorkCount: 1
-    }
-  ],
-  logs: [
-    { id: 'l1', week: '4', staffId: 's1', mappingId: 'm1', exerciseCount: 5, timestamp: '2023-11-20', status: 'COMPLIANT' },
-    { id: 'l2', week: '4', staffId: 's2', mappingId: 'm2', exerciseCount: 0, timestamp: '2023-11-21', status: 'DEFAULTER', reason: 'Medical Leave' }
-  ],
+  curriculum: [],
+  mappings: [],
+  weeklyMappings: [],
   masterPupils: {},
   superAdminRegistry: [],
   messages: []

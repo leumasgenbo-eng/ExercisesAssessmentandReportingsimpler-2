@@ -1,6 +1,5 @@
-const SUPABASE_PROJECT_ID = 'zokbowglwohpfqmjnemc';
-const SUPABASE_URL = `https://${SUPABASE_PROJECT_ID}.supabase.co/rest/v1`;
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpva2Jvd2dsd29ocGZxbWpuZW1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NzAyOTEsImV4cCI6MjA4NDU0NjI5MX0.FA-TC3fnHAipudO8X-jJ7iljkwxn9L_g-tuXd8x4_Yo';
+const SUPABASE_URL = `https://atlhesebcfjcecmbmwuj.supabase.co/rest/v1`;
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0bGhlc2ViY2ZqY2VjbWJtd3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0NDc0MTYsImV4cCI6MjA4NTAyMzQxNn0.hmiF7aWatQCGaJPuc2LzzF7z2IAxwoBy3fGlNacz2XQ';
 
 const headers = {
   'apikey': SUPABASE_KEY,
@@ -11,32 +10,45 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * Fetches staff identities with Teaching Categories.
-   * Differentiates Basic-Subject, Daycare, and KG staff.
+   * v7.9 Protocol: Verify a PIN (unique_code) and return identity metadata
    */
-  async fetchStaff() {
-    const res = await fetch(`${SUPABASE_URL}/uba_identities?select=*`, { headers });
+  async verifyCredential(pin: string) {
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?unique_code=eq.${pin}&select=*`, { headers });
+    if (!res.ok) throw new Error('Cloud Handshake Error');
+    const data = await res.json();
+    return data[0] || null;
+  },
+
+  async fetchStaff(hubId: string) {
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*`, { headers });
     if (!res.ok) throw new Error('Cloud Identity Fetch Failed');
     return res.json();
   },
 
-  /**
-   * Fetches pupil records.
-   * Handles Basic 9 Shared IDs and Creche-Basic 8 Local Codes.
-   */
-  async fetchPupils() {
-    const res = await fetch(`${SUPABASE_URL}/uba_pupils?select=*`, { headers });
+  async fetchPupils(hubId: string) {
+    const res = await fetch(`${SUPABASE_URL}/uba_pupils?hub_id=eq.${hubId}&select=*`, { headers });
     if (!res.ok) throw new Error('Cloud Pupil Registry Fetch Failed');
     return res.json();
   },
 
   /**
-   * Persistence logic for DAILY ACTIVITIES JSON state.
+   * Retrieves the institutional state blob (Persistence Shard)
    */
-  async pushGlobalState(nodeId: string, fullState: any) {
+  async fetchPersistence(nodeId: string, hubId: string) {
+    const persistenceId = `daily_activity_${hubId}_${nodeId}`;
+    const res = await fetch(`${SUPABASE_URL}/uba_persistence?id=eq.${persistenceId}&select=payload`, { headers });
+    if (!res.ok) throw new Error('Cloud Persistence Retrieval Failed');
+    const data = await res.json();
+    return data[0]?.payload || null;
+  },
+
+  /**
+   * Pushes the full app state to the cloud shard
+   */
+  async pushGlobalState(nodeId: string, hubId: string, fullState: any) {
     const payload = {
-      id: `daily_activity_${nodeId}`, // Specific key for Activity App
-      hub_id: 'SMA-HQ',
+      id: `daily_activity_${hubId}_${nodeId}`, 
+      hub_id: hubId,
       payload: fullState,
       last_updated: new Date().toISOString()
     };

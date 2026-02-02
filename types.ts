@@ -26,7 +26,7 @@ export type FacilitatorRoleType = 'CLASS_BASED' | 'SUBJECT_BASED';
 
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME';
 
-export type UserRole = 'SUPER_ADMIN' | 'SCHOOL_ADMIN' | 'FACILITATOR' | 'PUPIL';
+export type UserRole = 'super_admin' | 'school_admin' | 'facilitator' | 'pupil';
 
 export type ManagementSubView = 'COMPLIANCE' | 'PLANNING' | 'SUBJECT_MAPPING';
 
@@ -36,6 +36,7 @@ export interface UserSession {
   role: UserRole;
   nodeName: string;
   nodeId: string;
+  hubId?: string;
   facilitatorId?: string;
   facilitatorName?: string;
   facilitatorCategory?: FacilitatorCategory;
@@ -63,9 +64,6 @@ export interface MasterPupilEntry {
   isJhsLevel: boolean;      // If true, uses shared studentId protocol
 }
 
-/**
- * Added missing InterventionRecord type
- */
 export interface InterventionRecord {
   id: string;
   date: string;
@@ -86,9 +84,6 @@ export interface Pupil {
   scores: Record<number, string>; 
   interventions?: InterventionRecord[];
   correctionStatus?: Record<number, { done: boolean; marked: boolean }>;
-  /**
-   * Added missing properties to Pupil interface
-   */
   scoreReasons?: Record<number, string>;
   interventionReason?: string;
 }
@@ -100,15 +95,9 @@ export interface ExerciseMetadata {
   date: string;
   maxScore: string;
   indicatorCodes?: string[]; 
-  /**
-   * Added skillLabel for criterion based assessments
-   */
   skillLabel?: string;
 }
 
-/**
- * Added missing AssessmentAttachment type
- */
 export interface AssessmentAttachment {
   name: string;
   data: string;
@@ -125,15 +114,9 @@ export interface AssessmentData {
   subject?: string;
   exercises: Record<number, ExerciseMetadata>;
   pupils: Pupil[];
-  /**
-   * Added attachment property
-   */
   attachment?: AssessmentAttachment;
 }
 
-/**
- * Added missing Message interface
- */
 export interface Message {
   id: string;
   from: string;
@@ -143,9 +126,6 @@ export interface Message {
   read: boolean;
 }
 
-/**
- * Added missing RegisteredSchool interface
- */
 export interface RegisteredSchool {
   id: string;
   name: string;
@@ -156,9 +136,6 @@ export interface RegisteredSchool {
   notified?: boolean;
 }
 
-/**
- * Added missing planning types
- */
 export type PlanningRemarks = 'Completed successfully' | 'Partially completed' | 'Uncompleted' | 'Repeated' | '';
 
 export interface WeeklyMapping {
@@ -195,15 +172,13 @@ export interface ManagementState {
   settings: {
     name: string;
     institutionalId: string;
+    hubId: string;
     currentTerm: string;
     currentYear: string;
     activeMonth: string;
     poorPerformanceThreshold: number;
     poorPerformanceFrequency: number;
     complianceThreshold: number;
-    /**
-     * Added missing settings properties
-     */
     slogan?: string;
     logo?: string;
     address?: string;
@@ -220,16 +195,10 @@ export interface ManagementState {
   };
   staff: Staff[];
   subjects: { id: string; name: string }[];
-  /**
-   * Added correct types for mappings
-   */
   mappings: FacilitatorSubjectMapping[];
   weeklyMappings: WeeklyMapping[];
   masterPupils: Record<string, MasterPupilEntry[]>;
   messages: Message[];
-  /**
-   * Added registry and logs for administrative tracking
-   */
   superAdminRegistry?: RegisteredSchool[];
   logs?: any[];
   curriculum?: any[];

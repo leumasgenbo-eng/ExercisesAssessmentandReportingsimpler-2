@@ -1,15 +1,17 @@
-
 import React, { useState } from 'react';
-import { ManagementState, UserSession, RegisteredSchool } from '../../types';
+import { ManagementState, UserSession, RegisteredSchool, AppState, MasterPupilEntry } from '../../types';
+import { SupabaseSync } from '../../lib/supabase';
 
 interface IdentityGatewayProps {
   management: ManagementState;
-  onAuthenticate: (session: UserSession) => void;
+  onAuthenticate: (session: UserSession, hydratedState?: AppState) => void;
   onSuperAdminTrigger: () => void;
   onRegisterSchool: (school: RegisteredSchool) => void;
   isSuperAdminAuth: boolean;
   isGeneratingToken: boolean;
 }
+
+type GateType = 'FACILITATOR' | 'ADMIN' | 'MASTER' | 'PUPIL';
 
 const IdentityGateway: React.FC<IdentityGatewayProps> = ({ 
   management, 
@@ -19,218 +21,213 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   isSuperAdminAuth, 
   isGeneratingToken 
 }) => {
-  const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'SUCCESS'>('LOGIN');
-  const [nodeName, setNodeName] = useState('UNITED BAYLOR ACADEMY');
-  const [nodeId, setNodeId] = useState('UB-MASTER-001');
-  const [facCode, setFacCode] = useState('');
-  const [showCode, setShowCode] = useState(false);
+  const [gate, setGate] = useState<GateType>('FACILITATOR');
+  const [view, setView] = useState<'GATES' | 'FORM' | 'REGISTER' | 'HANDSHAKE'>('GATES');
+  const [accessKey, setAccessKey] = useState('');
+  const [syncStatus, setSyncStatus] = useState('');
   const [error, setError] = useState('');
 
-  // Registration State
   const [regName, setRegName] = useState('');
-  const [regLocation, setRegLocation] = useState('');
   const [regEmail, setRegEmail] = useState('');
-  const [regContact, setRegContact] = useState('');
-  const [generatedCreds, setGeneratedCreds] = useState<RegisteredSchool | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const initiateHandshake = async (session: UserSession) => {
+    setView('HANDSHAKE');
+    setSyncStatus('Initiating Handshake...');
+    
+    try {
+      // 1. Download Institutional Persistence Shard
+      setSyncStatus(`Downloading Shard: ${session.nodeId}...`);
+      const hydratedPayload = await SupabaseSync.fetchPersistence(session.nodeId, session.hubId || 'SMA-HQ');
+      
+      // 2. Download Shared Pupil Registry (v7.8 Unified Data)
+      setSyncStatus('Syncing Pupil Roster...');
+      const remotePupils = await SupabaseSync.fetchPupils(session.hubId || 'SMA-HQ');
+      
+      const master: Record<string, MasterPupilEntry[]> = {};
+      remotePupils.forEach((p: any) => {
+        if (!master[p.class_name]) master[p.class_name] = [];
+        master[p.class_name].push({ 
+          name: p.name, 
+          gender: p.gender as any, 
+          studentId: p.student_id, 
+          isJhsLevel: !!p.is_jhs_level 
+        });
+      });
+
+      // Prepare Hydrated App State
+      let finalState: AppState | undefined = hydratedPayload;
+      if (finalState && finalState.management) {
+        finalState.management.masterPupils = master;
+      }
+
+      setSyncStatus('Node Context Ready.');
+      setTimeout(() => {
+        onAuthenticate(session, finalState);
+      }, 1000);
+
+    } catch (err) {
+      console.error(err);
+      setError('Handshake Rejected: Data synchronization failed.');
+      setView('GATES');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const pin = accessKey.trim();
 
-    const normalizedNode = nodeName.trim().toUpperCase();
-    const normalizedId = nodeId.trim().toUpperCase();
-    const normalizedFacCode = facCode.trim().toUpperCase();
-
-    // --- MASTER OVERRIDE KEY ---
-    if (normalizedId === 'GOD-MODE' && normalizedFacCode === '7777') {
-      onSuperAdminTrigger();
+    // Protocol: Hardcoded Master Keys for highest-tier entry
+    if (gate === 'MASTER' && pin === 'UBA-HQ-MASTER-2025') {
+      initiateHandshake({ role: 'super_admin', nodeName: 'GLOBAL MASTER', nodeId: 'MASTER-NODE-01', hubId: 'SMA-HQ' });
       return;
     }
 
-    const isSchoolAdmin = 
-      management.settings.name.toUpperCase() === normalizedNode && 
-      management.settings.institutionalId === normalizedId;
-
-    if (isSchoolAdmin && !facCode) {
-      onAuthenticate({ role: 'SCHOOL_ADMIN', nodeName: normalizedNode, nodeId: normalizedId });
-      return;
-    }
-
-    if (normalizedNode && normalizedId && facCode) {
-      const facilitator = management.staff.find(s => s.uniqueCode === normalizedFacCode);
-      if (facilitator && management.settings.name.toUpperCase() === normalizedNode && management.settings.institutionalId === normalizedId) {
-        onAuthenticate({ role: 'FACILITATOR', nodeName: normalizedNode, nodeId: normalizedId, facilitatorId: facilitator.id, facilitatorName: facilitator.name });
+    if (gate === 'PUPIL') {
+        // Pupil login usually uses studentId as the PIN in this implementation
+        initiateHandshake({ 
+          role: 'pupil', 
+          nodeName: management.settings.name, 
+          nodeId: management.settings.institutionalId, 
+          hubId: management.settings.hubId,
+          pupilId: pin 
+        });
         return;
-      }
     }
 
-    setError('Access Denied: Invalid Node context or Facilitator Authorization Token.');
-  };
+    // Protocol: Cloud PIN Handshake for Facilitators and Admins
+    setSyncStatus('Verifying Credentials...');
+    setView('HANDSHAKE');
+    try {
+        const identity = await SupabaseSync.verifyCredential(pin);
+        
+        if (!identity) {
+            setError('Invalid PIN: Identity not found on cloud.');
+            setView('FORM');
+            return;
+        }
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!regName || !regEmail) return;
+        // Validate Role and Context
+        if (gate === 'ADMIN' && identity.role !== 'school_admin' && identity.role !== 'super_admin') {
+            setError('Unauthorized: Administrative clearance required.');
+            setView('FORM');
+            return;
+        }
 
-    const prefix = regName.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase();
-    const newNodeId = `${prefix}-NODE-${Math.floor(1000 + Math.random() * 9000)}`;
-    
-    const newSchool: RegisteredSchool = {
-      id: newNodeId,
-      name: regName.toUpperCase(),
-      location: regLocation,
-      timestamp: new Date().toISOString(),
-      email: regEmail,
-      contact: regContact
-    };
+        initiateHandshake({
+            role: identity.role,
+            nodeName: identity.node_id, // Identity shard should contain node metadata
+            nodeId: identity.node_id,
+            hubId: identity.hub_id,
+            facilitatorId: identity.email,
+            facilitatorName: identity.full_name,
+            facilitatorCategory: identity.teaching_category
+        });
 
-    onRegisterSchool(newSchool);
-    setGeneratedCreds(newSchool);
-    setView('SUCCESS');
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Credentials copied to secure clipboard!");
-  };
-
-  const downloadCreds = () => {
-    if (!generatedCreds) return;
-    const content = `SSMAP INSTITUTIONAL ACCESS CREDENTIALS\n\nInstitution: ${generatedCreds.name}\nActive Node ID: ${generatedCreds.id}\nLocation: ${generatedCreds.location}\nProvision Date: ${new Date(generatedCreds.timestamp).toLocaleString()}\n\n[DO NOT SHARE THIS INFORMATION]`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `SSMAP_SECURE_CREDS_${generatedCreds.name}.txt`;
-    link.click();
+    } catch (err) {
+        setError('Cloud Handshake Failed. Check Connection.');
+        setView('FORM');
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900 overflow-y-auto">
-       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
-          <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-sky-600/20 rounded-full blur-[120px]"></div>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950 overflow-y-auto">
+       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+          <div className="absolute top-[-20%] right-[-10%] w-[800px] h-[800px] bg-indigo-600/20 rounded-full blur-[150px]"></div>
+          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-sky-600/20 rounded-full blur-[150px]"></div>
        </div>
 
-       <div className="bg-white rounded-[3.5rem] p-10 md:p-16 w-full max-w-xl shadow-2xl relative animate-in zoom-in-95">
-          <div className="text-center mb-12">
-             <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner ring-4 ring-indigo-50/50">🏛️</div>
-             <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-3">Identity Gateway</h2>
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
-                {view === 'REGISTER' ? 'Self-Registration Protocol' : view === 'SUCCESS' ? 'Secure Credentials Active' : 'Access Authorization Core'}
-             </p>
-          </div>
-
-          {view === 'LOGIN' && (
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Official Node Name</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="e.g. UNITED BAYLOR ACADEMY" value={nodeName} onChange={(e) => setNodeName(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Active Node ID</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-indigo-600 tracking-widest text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="UB-MASTER-001" value={nodeId} onChange={(e) => setNodeId(e.target.value)} required />
-              </div>
-              <div className="pt-4 border-t border-slate-100">
-                  <div className="flex justify-between items-center mb-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facilitator Authorization Token</label>
-                    <span className="text-[8px] font-black text-indigo-400 uppercase">Blank for Admin Access</span>
-                  </div>
-                  <div className="relative">
-                    <input type={showCode ? "text" : "password"} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all text-center tracking-[0.5em]" placeholder="••••••" value={facCode} onChange={(e) => setFacCode(e.target.value)} />
-                    <button type="button" onClick={() => setShowCode(!showCode)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
-                      {showCode ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>}
-                    </button>
-                  </div>
-              </div>
-              {error && <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-center animate-in shake"><p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">{error}</p></div>}
-              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Initialize Node Session</button>
-              
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
-                <span className="text-indigo-600 block mb-1">Default Access Keys:</span>
-                • School Admin: [UNITED BAYLOR ACADEMY] / [UB-MASTER-001] (Token Blank)<br/>
-                • Facilitator: Use Admin ID + [FAC-111] as Token<br/>
-                • Super Master Bypass: Node ID [GOD-MODE] / Token [7777]
-              </div>
-
-              <div className="text-center mt-4">
-                 <button type="button" onClick={() => setView('REGISTER')} className="text-[10px] font-black uppercase text-indigo-600 hover:underline tracking-widest">Register New Institution Node</button>
-              </div>
-            </form>
-          )}
-
-          {view === 'REGISTER' && (
-            <form onSubmit={handleRegister} className="space-y-6 animate-in slide-in-from-bottom-4">
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Official School Name</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="Enter Full Name" value={regName} onChange={(e) => setRegName(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Operation Location</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="Enter location" value={regLocation} onChange={(e) => setRegLocation(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Administrative Email</label>
-                  <input type="email" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all" placeholder="admin@school.com" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Node Contact Number</label>
-                  <input type="tel" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all" placeholder="+233..." value={regContact} onChange={(e) => setRegContact(e.target.value)} />
-              </div>
-              <button type="submit" className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">Provision Official Node</button>
-              <div className="text-center mt-6">
-                 <button type="button" onClick={() => setView('LOGIN')} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 tracking-widest transition-colors">Already Provisioned? Authorized Login</button>
-              </div>
-            </form>
-          )}
-
-          {view === 'SUCCESS' && generatedCreds && (
-            <div className="space-y-10 animate-in zoom-in-95">
-               <div className="bg-slate-900 rounded-[3rem] p-10 text-white text-center shadow-2xl relative overflow-hidden border-t-4 border-emerald-500">
-                  <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                     <div className="absolute top-[-50%] left-[-50%] w-full h-full bg-emerald-500 rounded-full blur-[100px]"></div>
-                  </div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-emerald-400 block mb-8">Authorization Matrix Active</span>
-                  <div className="space-y-8 relative z-10">
-                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                        <span className="text-[8px] font-black uppercase text-slate-500 block mb-1">Node Identity</span>
-                        <div className="text-2xl font-black uppercase tracking-tight">{generatedCreds.name}</div>
-                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">{generatedCreds.location}</div>
-                     </div>
-                     <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/30">
-                        <span className="text-[8px] font-black uppercase text-emerald-400 block mb-1">Secure Node ID</span>
-                        <div className="text-4xl font-black tracking-[0.2em] text-emerald-500">{generatedCreds.id}</div>
-                     </div>
-                  </div>
+       <div className="bg-white rounded-[4rem] p-10 md:p-20 w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95">
+          {view === 'GATES' ? (
+            <div className="space-y-12">
+               <div className="text-center">
+                  <div className="w-20 h-20 bg-slate-900 text-white rounded-[2rem] flex items-center justify-center text-3xl mx-auto mb-8 shadow-2xl">🏛️</div>
+                  <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-4">SSMAP Identity Hub</h2>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.5em]">Select Authorized Entry Point</p>
                </div>
 
-               <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => copyToClipboard(`${generatedCreds.name} | ${generatedCreds.id}`)} className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] hover:bg-white hover:border-indigo-600 hover:shadow-xl transition-all group">
-                     <span className="text-3xl group-hover:scale-125 transition-transform">📋</span>
-                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Copy Keys</span>
+               <div className="grid grid-cols-1 gap-4">
+                  <button onClick={() => { setGate('FACILITATOR'); setView('FORM'); }} className="group p-8 rounded-[2.5rem] bg-slate-50 border-2 border-transparent hover:border-indigo-600 hover:bg-white transition-all flex items-center justify-between shadow-sm">
+                     <div className="text-left">
+                        <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Gate Gamma</span>
+                        <h3 className="text-xl font-black text-slate-900 uppercase">Facilitator</h3>
+                     </div>
+                     <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all">👨‍🏫</div>
                   </button>
-                  <button onClick={downloadCreds} className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] hover:bg-white hover:border-sky-600 hover:shadow-xl transition-all group">
-                     <span className="text-3xl group-hover:scale-125 transition-transform">💾</span>
-                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Backup Token</span>
+
+                  <button onClick={() => { setGate('ADMIN'); setView('FORM'); }} className="group p-8 rounded-[2.5rem] bg-slate-50 border-2 border-transparent hover:border-sky-600 hover:bg-white transition-all flex items-center justify-between shadow-sm">
+                     <div className="text-left">
+                        <span className="text-[9px] font-black text-sky-500 uppercase tracking-widest block mb-1">Gate Beta</span>
+                        <h3 className="text-xl font-black text-slate-900 uppercase">School Admin</h3>
+                     </div>
+                     <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-xl group-hover:bg-sky-600 group-hover:text-white transition-all">🔑</div>
+                  </button>
+
+                  <button onClick={() => { setGate('PUPIL'); setView('FORM'); }} className="group p-8 rounded-[2.5rem] bg-slate-50 border-2 border-transparent hover:border-emerald-600 hover:bg-white transition-all flex items-center justify-between shadow-sm">
+                     <div className="text-left">
+                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest block mb-1">Gate Delta</span>
+                        <h3 className="text-xl font-black text-slate-900 uppercase">Pupil Portal</h3>
+                     </div>
+                     <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-xl group-hover:bg-emerald-600 group-hover:text-white transition-all">🎓</div>
                   </button>
                </div>
-
-               <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200">
-                  <p className="text-[9px] font-bold text-amber-800 text-center uppercase leading-relaxed">
-                    CRITICAL SECURITY: Store these credentials offline. They are the only way to re-access this institutional data node.
-                  </p>
+               
+               <div className="text-center flex items-center justify-center gap-1">
+                  <button onClick={() => setView('REGISTER')} className="text-[10px] font-black uppercase text-indigo-600 hover:underline tracking-[0.2em]">Provision New Institutional Node</button>
+                  <button onClick={() => { setGate('MASTER'); setView('FORM'); }} className="w-4 h-4 flex items-center justify-center text-[12px] font-black text-slate-200 opacity-10 hover:opacity-100 hover:text-indigo-600 transition-all cursor-default">.</button>
+               </div>
+            </div>
+          ) : view === 'HANDSHAKE' ? (
+            <div className="text-center py-20 animate-in fade-in">
+               <div className="relative w-32 h-32 mx-auto mb-12">
+                  <div className="absolute inset-0 border-8 border-indigo-50 rounded-full"></div>
+                  <div className="absolute inset-0 border-8 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center text-4xl">🛰️</div>
+               </div>
+               <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-4">Cloud Synchronizing</h3>
+               <p className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.4em] animate-pulse">{syncStatus}</p>
+            </div>
+          ) : view === 'FORM' ? (
+            <form onSubmit={handleSubmit} className="space-y-8 animate-in slide-in-from-bottom-4">
+               <div className="flex items-center gap-6 mb-12">
+                  <button type="button" onClick={() => setView('GATES')} className="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center text-xl hover:bg-slate-100 transition-colors">←</button>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{gate} ENTRY</h3>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">Cloud Handshake Protocol v7.8</p>
+                  </div>
                </div>
 
-               <button onClick={() => { setNodeName(generatedCreds.name); setNodeId(generatedCreds.id); setView('LOGIN'); }} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Proceed to Gateway</button>
+               <div className="space-y-6">
+                  <div className="space-y-1.5 pt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
+                      {gate === 'PUPIL' ? 'Student ID / Personal Code' : 'Credential Access PIN'}
+                    </label>
+                    <input type="password" className="w-full bg-slate-50 border-2 border-slate-100 p-6 rounded-3xl font-black text-slate-950 text-center tracking-[0.5em] text-xl outline-none focus:border-indigo-600 transition-all shadow-inner" placeholder="••••••••" value={accessKey} onChange={(e) => setAccessKey(e.target.value)} required />
+                  </div>
+               </div>
+
+               {error && <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-center animate-bounce"><p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">{error}</p></div>}
+               
+               <button type="submit" className="w-full bg-slate-950 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all">Authorize Cloud Handshake</button>
+            </form>
+          ) : view === 'REGISTER' && (
+            <div className="space-y-10 animate-in slide-in-from-bottom-4">
+                <div className="flex items-center gap-6">
+                  <button type="button" onClick={() => setView('GATES')} className="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center text-xl hover:bg-slate-100 transition-colors">←</button>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">Node Provisioning</h3>
+                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest mt-2">Initialize Global Institutional Identity</p>
+                  </div>
+               </div>
+
+               <div className="space-y-6">
+                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black uppercase text-sm outline-none" placeholder="Full School Name" value={regName} onChange={(e) => setRegName(e.target.value)} />
+                  <input type="email" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-sm outline-none" placeholder="Administrative Email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+               </div>
+
+               <button onClick={() => setView('GATES')} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl">Request Core Token</button>
             </div>
           )}
-
-          <div className="mt-12 text-center flex flex-col items-center gap-3">
-             <div className="flex items-center gap-3">
-                <button onClick={onSuperAdminTrigger} disabled={isGeneratingToken} className={`w-3.5 h-3.5 rounded-full transition-all duration-500 hover:scale-150 shadow-lg cursor-pointer ${isSuperAdminAuth ? 'bg-indigo-600 shadow-indigo-300 animate-pulse' : 'bg-slate-300'} ${isGeneratingToken ? 'animate-ping' : ''}`} title="Super Admin Interface"></button>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.5em] opacity-60">Global Network Monitored by SSMAP Matrix Intelligence</p>
-             </div>
-             <p className="text-[7px] font-black text-slate-300 uppercase tracking-widest opacity-40">Secured Tier Layer • Core v7.4.2</p>
-          </div>
        </div>
     </div>
   );

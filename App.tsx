@@ -101,6 +101,25 @@ const App: React.FC = () => {
     });
   };
 
+  /**
+   * AUTHENTICATION HANDLER: Handles both session identification and node hydration
+   */
+  const handleAuthenticate = (userSession: UserSession, hydratedState?: AppState) => {
+    if (hydratedState) {
+      // Direct application of downloaded cloud state
+      setState(hydratedState);
+      
+      // Sync global temporal contexts from the hydrated shard
+      const settings = hydratedState.management.settings;
+      setActiveYear(settings.currentYear);
+      setActiveTerm(settings.currentTerm);
+      setActiveMonth(settings.activeMonth);
+      
+      console.log(`Node Hydration Successful for ${userSession.nodeName}`);
+    }
+    setSession(userSession);
+  };
+
   const dataKey = `${activeYear}|${activeTerm}|${activeMonth}|${activeWeek}|${activeClass}|${activeSubject}`;
   const activeAssessmentData = useMemo(() => {
     const category = activeTab === 'CLASS' ? state.classWork : activeTab === 'HOME' ? state.homeWork : activeTab === 'PROJECT' ? state.projectWork : state.criterionWork;
@@ -136,8 +155,8 @@ const App: React.FC = () => {
     return (
       <IdentityGateway 
         management={state.management}
-        onAuthenticate={setSession}
-        onSuperAdminTrigger={() => setSession({ role: 'SUPER_ADMIN', nodeName: 'MASTER', nodeId: 'GLOBAL' })}
+        onAuthenticate={handleAuthenticate}
+        onSuperAdminTrigger={() => handleAuthenticate({ role: 'super_admin', nodeName: 'MASTER', nodeId: 'GLOBAL' })}
         onRegisterSchool={(school) => updateManagementData({ ...state.management, superAdminRegistry: [...(state.management.superAdminRegistry || []), school] })}
         isSuperAdminAuth={false}
         isGeneratingToken={false}
@@ -145,8 +164,7 @@ const App: React.FC = () => {
     );
   }
 
-  // Redirect Pupil role if they try to access non-authorized views
-  if (session.role === 'PUPIL' && activeView !== 'PUPILS') {
+  if (session.role === 'pupil' && activeView !== 'PUPILS') {
     setActiveView('PUPILS');
   }
 
@@ -192,10 +210,11 @@ const App: React.FC = () => {
 
           {activeView === 'ASSESSMENT' && (
             <div className="space-y-6">
+              {/* EXACT HEADER REQUIREMENT */}
               <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
                  <div className="flex items-center gap-4">
                     <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
-                    <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: {state.management.settings.name} • CLS: ASSESSMENT SHEET</h2>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: UNITED BAYLOR A. • CLS: ASSESSMENT SHEET</h2>
                  </div>
               </div>
               <AssessmentSheet 
@@ -218,11 +237,11 @@ const App: React.FC = () => {
               onUpdateState={(type, key, data) => setState(prev => ({...prev, [type === 'CLASS' ? 'classWork' : 'homeWork']: {...prev[type === 'CLASS' ? 'classWork' : 'homeWork'], [key]: data}}))}
               isFocusMode={isFocusMode} 
               setIsFocusMode={setIsFocusMode}
-              isIndividualOnly={session.role === 'PUPIL'}
+              isIndividualOnly={session.role === 'pupil'}
             />
           )}
 
-          {activeView === 'ADMIN' && session.role === 'SCHOOL_ADMIN' && (
+          {activeView === 'ADMIN' && session.role === 'school_admin' && (
             <AdminPanel 
               data={state.management} 
               fullState={state} 
@@ -232,7 +251,7 @@ const App: React.FC = () => {
             />
           )}
 
-          {activeView === 'SUPER_ADMIN' && session.role === 'SUPER_ADMIN' && (
+          {activeView === 'SUPER_ADMIN' && session.role === 'super_admin' && (
             <SuperAdminPortal state={state} onUpdateState={setState} onUpdateManagement={updateManagementData} />
           )}
 
@@ -240,7 +259,7 @@ const App: React.FC = () => {
             <div className="max-w-4xl mx-auto space-y-8 animate-in">
               <div className="bg-white rounded-[3rem] p-10 shadow-2xl border border-slate-200">
                 <h3 className="text-3xl font-black uppercase tracking-tight mb-8">
-                  {session.role === 'SCHOOL_ADMIN' ? 'Message Facilitators' : 'Message School Admin'}
+                  {session.role === 'school_admin' ? 'Message Facilitators' : 'Message School Admin'}
                 </h3>
                 <textarea 
                   className="w-full bg-slate-50 border-2 border-slate-100 p-8 rounded-[2.5rem] font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all resize-none h-48 shadow-inner"
@@ -248,18 +267,18 @@ const App: React.FC = () => {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      sendMessage((e.target as HTMLTextAreaElement).value, session.role === 'SCHOOL_ADMIN' ? 'FACILITATORS' : 'ADMIN');
+                      sendMessage((e.target as HTMLTextAreaElement).value, session.role === 'school_admin' ? 'FACILITATORS' : 'ADMIN');
                       (e.target as HTMLTextAreaElement).value = '';
                       alert("Message Dispatched Successfully.");
                     }
                   }}
                 />
-                <div className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Press Enter to Dispatch to {session.role === 'SCHOOL_ADMIN' ? 'All Staff' : 'Admin Hub'}</div>
+                <div className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Press Enter to Dispatch to {session.role === 'school_admin' ? 'All Staff' : 'Admin Hub'}</div>
               </div>
 
               <div className="space-y-4">
                 {state.management.messages
-                  .filter(m => (session.role === 'SCHOOL_ADMIN' && m.to === 'ADMIN') || (session.role === 'FACILITATOR' && m.to === 'FACILITATORS'))
+                  .filter(m => (session.role === 'school_admin' && m.to === 'ADMIN') || (session.role === 'facilitator' && m.to === 'FACILITATORS'))
                   .map(msg => (
                     <div key={msg.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-lg">
                       <div className="flex justify-between items-start mb-3">
@@ -278,11 +297,11 @@ const App: React.FC = () => {
       <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
         <div className="flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v7.4.2 • Secured Session</span>
+          <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v7.9.0 • Secured Session</span>
         </div>
         <div className="flex items-center gap-6">
           <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
-          {session.role !== 'SUPER_ADMIN' && (
+          {session.role !== 'super_admin' && (
             <button 
               onDoubleClick={() => navigateToView('SUPER_ADMIN')}
               className="w-5 h-5 bg-transparent opacity-0 cursor-default"

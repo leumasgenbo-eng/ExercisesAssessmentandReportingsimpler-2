@@ -138,7 +138,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="flex gap-2">
             <button onClick={handleBackup} className="flex-1 bg-white border border-rose-100 text-rose-600 p-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Backup</button>
             <button onClick={() => restoreInputRef.current?.click()} className="flex-1 bg-white border border-rose-100 text-rose-600 p-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Restore</button>
-            <input type="file" hide="true" ref={restoreInputRef} onChange={handleRestore} className="hidden" accept=".json" />
+            {/* Fix: Removed invalid 'hide' property from input element */}
+            <input type="file" ref={restoreInputRef} onChange={handleRestore} className="hidden" accept=".json" />
           </div>
         </div>
       </div>

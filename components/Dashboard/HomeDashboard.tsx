@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { AppState, MasterPupilEntry, UserRole } from '../../types';
 import { SCHOOL_NAME } from '../../constants';
@@ -35,7 +36,8 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
   ];
 
   const quickActions = useMemo(() => {
-    if (userRole === 'SCHOOL_ADMIN') {
+    // Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type
+    if (userRole === 'school_admin') {
       return [
         { id: 'ASSESSMENT', label: 'Assess', desc: 'Logging System', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
         { id: 'PLANNING', label: 'Plan', desc: 'Curriculum Roadmap', icon: '📅', accent: 'bg-indigo-50 text-indigo-600' },
@@ -43,7 +45,8 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
         { id: 'ADMIN', label: 'Identity', desc: 'School Settings', icon: '⚙️', accent: 'bg-amber-50 text-amber-600' },
       ];
     }
-    if (userRole === 'FACILITATOR') {
+    // Fix: Changed 'FACILITATOR' to lowercase 'facilitator' to match UserRole type
+    if (userRole === 'facilitator') {
       return [
         { id: 'ASSESSMENT', label: 'Assess', desc: 'Activity Logs', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
         { id: 'PLANNING', label: 'Plan', desc: 'My Broadsheets', icon: '📅', accent: 'bg-indigo-50 text-indigo-600' },
@@ -79,7 +82,8 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
       </div>
 
       {/* Admin Announcement Creator */}
-      {userRole === 'SCHOOL_ADMIN' && (
+      {/* Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type */}
+      {userRole === 'school_admin' && (
         <div className="bg-amber-50 rounded-[3rem] p-10 border-2 border-amber-200 shadow-xl animate-in slide-in-from-bottom-2">
            <h4 className="text-2xl font-black text-amber-950 uppercase tracking-tight mb-6 flex items-center gap-4">
               <span className="w-12 h-12 rounded-2xl bg-amber-200 flex items-center justify-center text-2xl shadow-sm">📢</span>
@@ -102,7 +106,8 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
       )}
 
       {/* Active Announcement (Visible to Facilitators/Pupils) */}
-      {userRole !== 'SCHOOL_ADMIN' && settings.announcement?.active && (
+      {/* Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type */}
+      {userRole !== 'school_admin' && settings.announcement?.active && (
         <div className="bg-indigo-600 rounded-[3.5rem] p-12 text-white shadow-2xl animate-pulse flex flex-col md:flex-row items-center gap-8 border-4 border-white/10">
            <div className="text-5xl">📡</div>
            <div>

@@ -219,7 +219,8 @@ const StaffRoster: React.FC<Props> = ({
                <button onClick={() => staffFileInputRef.current?.click()} className="p-2 bg-slate-50 text-slate-400 hover:text-sky-600 rounded-lg transition-all" title="Bulk Import Roster">
                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                </button>
-               <input type="file" hide="true" ref={staffFileInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json" />
+               {/* Fix: Removed invalid 'hide' property from input element */}
+               <input type="file" ref={staffFileInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json" />
             </div>
           </div>
           
