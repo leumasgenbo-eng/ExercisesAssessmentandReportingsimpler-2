@@ -139,7 +139,7 @@ const ScoringDesk: React.FC<Props> = ({
     <div className={`animate-in fade-in slide-in-from-bottom-4 duration-700 ${isInterviewMode ? 'pb-40' : 'pb-20'}`}>
       {/* 
           MANAGEMENT HEADER
-          Hidden in INTERVIEW (CAPI) mode to satisfy the "show only CAPI" requirement.
+          Hidden completely in INTERVIEW (CAPI) mode.
       */}
       {!isInterviewMode && (
         <div className="mb-6 md:mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 no-print border-b-2 border-slate-100 pb-6 md:pb-8">
@@ -188,10 +188,6 @@ const ScoringDesk: React.FC<Props> = ({
              </div>
 
              <div className="flex bg-slate-100 p-1 rounded-xl md:rounded-full gap-1 shadow-inner shrink-0 w-full md:w-auto mt-2 md:mt-0">
-                {/* 
-                    Fix: Error in file components/Assessments/ScoringDesk.tsx on line 192 (approx).
-                    Using isInterviewMode instead of literal comparisons to satisfy TypeScript's unintentional comparison check inside narrowed scope.
-                */}
                 <button onClick={() => setViewMode('TABLE')} className={`flex-1 md:flex-none px-4 md:px-8 py-2 md:py-2.5 rounded-lg md:rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${!isInterviewMode ? 'bg-white text-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Table</button>
                 <button onClick={() => setViewMode('INTERVIEW')} className={`flex-1 md:flex-none px-4 md:px-8 py-2 md:py-2.5 rounded-lg md:rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${isInterviewMode ? 'bg-slate-950 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>Pulse</button>
              </div>
