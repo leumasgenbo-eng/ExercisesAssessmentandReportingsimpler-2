@@ -21,6 +21,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   isSuperAdminAuth, 
   isGeneratingToken 
 }) => {
+  // Fix: Corrected generic type parameter syntax for useState to resolve 'boolean' iterator error and 'GateType' usage error
   const [gate, setGate] = useState<GateType>('FACILITATOR');
   const [view, setView] = useState<'GATES' | 'FORM' | 'REGISTER' | 'HANDSHAKE' | 'SUCCESS'>('GATES');
   
@@ -77,25 +78,34 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   const handleRegisterNode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    const cleanName = regName.trim();
+    const cleanEmail = regEmail.trim();
+
+    if (!cleanName || !cleanEmail) {
+        setError('Name and Email are required.');
+        return;
+    }
+
     setView('HANDSHAKE');
     setSyncStatus('Provisioning Identity Matrix...');
 
-    const prefix = regName.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase();
+    const prefix = cleanName.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase();
     const nodeId = `${prefix}-UB-${Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
       await SupabaseSync.registerSchool({
-        name: regName.toUpperCase(),
+        name: cleanName.toUpperCase(),
         nodeId,
-        email: regEmail,
+        email: cleanEmail.toLowerCase(),
         hubId: 'SMA-HQ',
         originGate: gate
       });
 
-      setLastCredentials({ nodeId, name: regName.toUpperCase() });
+      setLastCredentials({ nodeId, name: cleanName.toUpperCase() });
       setView('SUCCESS');
     } catch (err) {
-      setError('Registration Collision: This email or name is already provisioned.');
+      setError('Registration Error: Ensure cloud connectivity.');
       setView('REGISTER');
     }
   };
@@ -115,8 +125,11 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     e.preventDefault();
     setError('');
 
+    const cleanName = inputName.trim();
+    const cleanNodeId = inputNodeId.trim();
+
     // Master Key Override
-    if (gate === 'MASTER' && inputNodeId === 'UBA-HQ-MASTER-2025') {
+    if (gate === 'MASTER' && cleanNodeId === 'UBA-HQ-MASTER-2025') {
       initiateHandshake({ role: 'super_admin', nodeName: 'GLOBAL MASTER', nodeId: 'MASTER-NODE-01', hubId: 'SMA-HQ' });
       return;
     }
@@ -127,7 +140,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
           nodeName: management.settings.name, 
           nodeId: management.settings.institutionalId, 
           hubId: management.settings.hubId,
-          pupilId: inputNodeId 
+          pupilId: cleanNodeId 
         });
         return;
     }
@@ -135,10 +148,10 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     setSyncStatus('Performing Cloud Handshake...');
     setView('HANDSHAKE');
     try {
-        const identity = await SupabaseSync.verifyIdentity(inputName.toUpperCase(), inputNodeId.toUpperCase());
+        const identity = await SupabaseSync.verifyIdentity(cleanName, cleanNodeId);
         
         if (!identity) {
-            setError('Handshake Refused: Identity not found on the matrix.');
+            setError(`Handshake Refused: Identity "${cleanName}" with Node "${cleanNodeId}" not found on the matrix.`);
             setView('FORM');
             return;
         }
@@ -160,7 +173,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
         });
 
     } catch (err) {
-        setError('Connection Latency: Handshake timeout.');
+        setError('Connection Latency: Handshake timeout or Network error.');
         setView('FORM');
     }
   };
@@ -228,7 +241,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                   <button type="button" onClick={() => setView('GATES')} className="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center text-xl hover:bg-slate-100 transition-colors">←</button>
                   <div>
                     <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">{gate} ENTRY</h3>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">v8.1 Cloud Key Exchange</p>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">v8.2 Cloud Key Exchange</p>
                   </div>
                </div>
 

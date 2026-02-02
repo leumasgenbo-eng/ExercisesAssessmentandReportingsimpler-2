@@ -10,14 +10,23 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * v8.0 Protocol: Verify Identity using Full Name and Node ID
+   * v8.2 Optimized Protocol: Verify Identity using Case-Insensitive Handshake
+   * Using 'ilike' ensures that mismatches in capitalization between UI and DB do not break the link.
    */
   async verifyIdentity(fullName: string, nodeId: string) {
-    const res = await fetch(
-      `${SUPABASE_URL}/uba_identities?full_name=eq.${encodeURIComponent(fullName)}&node_id=eq.${encodeURIComponent(nodeId)}&select=*`, 
-      { headers }
-    );
-    if (!res.ok) throw new Error('Cloud Handshake Error');
+    const cleanName = fullName.trim();
+    const cleanNode = nodeId.trim();
+    
+    // Constructing URL with 'ilike' for case-insensitive matching
+    const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*`;
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?${query}`, { headers });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('Supabase Handshake Error:', errorText);
+      throw new Error('Cloud Identity Lookup Failed');
+    }
+    
     const data = await res.json();
     return data[0] || null;
   },
@@ -70,7 +79,7 @@ export const SupabaseSync = {
   },
 
   /**
-   * v8.1 Provisioning: Registers a new school node and its first admin identity
+   * v8.2 Provisioning: Registers new school with explicit Identity Hub entry
    */
   async registerSchool(schoolData: { 
     name: string, 
@@ -79,11 +88,11 @@ export const SupabaseSync = {
     hubId: string,
     originGate: string 
   }) {
-    // 1. Provision the primary Admin Identity using Name/ID protocol
+    // 1. Provision the primary Admin Identity in the uba_identities table
     const identityPayload = {
-      email: schoolData.email,
-      full_name: schoolData.name, // Use the actual school name as the identity label
-      node_id: schoolData.nodeId,
+      email: schoolData.email.trim().toLowerCase(),
+      full_name: schoolData.name.trim().toUpperCase(),
+      node_id: schoolData.nodeId.trim().toUpperCase(),
       hub_id: schoolData.hubId,
       role: 'school_admin',
       teaching_category: 'ADMINISTRATOR'
@@ -95,9 +104,13 @@ export const SupabaseSync = {
       body: JSON.stringify(identityPayload)
     });
 
-    if (!idRes.ok) throw new Error('Identity Creation Failed');
+    if (!idRes.ok) {
+      const err = await idRes.text();
+      console.error('Identity Provisioning Error:', err);
+      throw new Error('Identity Creation Failed');
+    }
 
-    // 2. Initialize the Persistence Shard for the Node
+    // 2. Initialize the Institutional Persistence Shard
     const persistenceId = `daily_activity_${schoolData.hubId}_${schoolData.nodeId}`;
     const initialPayload = {
         classWork: {},
@@ -107,8 +120,8 @@ export const SupabaseSync = {
         bookCountRecords: {},
         management: {
             settings: {
-                name: schoolData.name,
-                institutionalId: schoolData.nodeId,
+                name: schoolData.name.toUpperCase(),
+                institutionalId: schoolData.nodeId.toUpperCase(),
                 hubId: schoolData.hubId,
                 currentTerm: "1ST TERM",
                 currentYear: "2024/2025",
@@ -117,7 +130,13 @@ export const SupabaseSync = {
                 poorPerformanceThreshold: 10,
                 poorPerformanceFrequency: 3
             },
-            staff: [{ id: schoolData.email, name: schoolData.name, role: 'school_admin', category: 'ADMINISTRATOR', email: schoolData.email }],
+            staff: [{ 
+              id: schoolData.email, 
+              name: schoolData.name.toUpperCase(), 
+              role: 'school_admin', 
+              category: 'ADMINISTRATOR', 
+              email: schoolData.email 
+            }],
             subjects: [],
             mappings: [],
             weeklyMappings: [],
