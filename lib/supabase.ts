@@ -10,10 +10,13 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * v7.9 Protocol: Verify a PIN (unique_code) and return identity metadata
+   * v8.0 Protocol: Verify Identity using Full Name and Node ID
    */
-  async verifyCredential(pin: string) {
-    const res = await fetch(`${SUPABASE_URL}/uba_identities?unique_code=eq.${pin}&select=*`, { headers });
+  async verifyIdentity(fullName: string, nodeId: string) {
+    const res = await fetch(
+      `${SUPABASE_URL}/uba_identities?full_name=eq.${encodeURIComponent(fullName)}&node_id=eq.${encodeURIComponent(nodeId)}&select=*`, 
+      { headers }
+    );
     if (!res.ok) throw new Error('Cloud Handshake Error');
     const data = await res.json();
     return data[0] || null;
@@ -57,7 +60,6 @@ export const SupabaseSync = {
       method: 'POST',
       headers: {
         ...headers,
-        // CRITICAL: Prevent duplicate shards by merging on primary key 'id'
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify(payload)
@@ -68,25 +70,23 @@ export const SupabaseSync = {
   },
 
   /**
-   * v8.0 Provisioning: Registers a new school node and its first admin identity
+   * v8.1 Provisioning: Registers a new school node and its first admin identity
    */
   async registerSchool(schoolData: { 
     name: string, 
     nodeId: string, 
     email: string, 
-    pin: string, 
     hubId: string,
     originGate: string 
   }) {
-    // 1. Provision the primary Admin Identity
+    // 1. Provision the primary Admin Identity using Name/ID protocol
     const identityPayload = {
       email: schoolData.email,
-      full_name: `${schoolData.name} ADMIN`,
+      full_name: schoolData.name, // Use the actual school name as the identity label
       node_id: schoolData.nodeId,
       hub_id: schoolData.hubId,
       role: 'school_admin',
-      teaching_category: 'ADMINISTRATOR',
-      unique_code: schoolData.pin
+      teaching_category: 'ADMINISTRATOR'
     };
 
     const idRes = await fetch(`${SUPABASE_URL}/uba_identities`, {
@@ -117,7 +117,7 @@ export const SupabaseSync = {
                 poorPerformanceThreshold: 10,
                 poorPerformanceFrequency: 3
             },
-            staff: [{ id: schoolData.email, name: `${schoolData.name} ADMIN`, role: 'school_admin', category: 'ADMINISTRATOR', email: schoolData.email, uniqueCode: schoolData.pin }],
+            staff: [{ id: schoolData.email, name: schoolData.name, role: 'school_admin', category: 'ADMINISTRATOR', email: schoolData.email }],
             subjects: [],
             mappings: [],
             weeklyMappings: [],
