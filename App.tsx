@@ -7,12 +7,13 @@ import FacilitatorPanel from './components/Staff/FacilitatorPanel';
 import PlanningPanel from './components/Planning/PlanningPanel';
 import AdminPanel from './components/Admin/AdminPanel';
 import PupilPortal from './components/Pupils/PupilPortal';
+import HomeDashboard from './components/Dashboard/HomeDashboard';
 import { SupabaseSync } from './lib/supabase';
 
-type ViewType = 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
+type ViewType = 'HOME' | 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
 
 const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<ViewType>('ASSESSMENT');
+  const [activeView, setActiveView] = useState<ViewType>('HOME');
   const [activeTab, setActiveTab] = useState<AssessmentType>('CLASS');
   const [activeSchoolGroup, setActiveSchoolGroup] = useState<SchoolGroup>('LOWER_BASIC');
   const [activeClass, setActiveClass] = useState<string>('Basic 1A');
@@ -165,7 +166,7 @@ const App: React.FC = () => {
         management: { ...INITIAL_MANAGEMENT_DATA } 
       });
       setPendingSyncKeys([]);
-      setActiveView('ASSESSMENT');
+      setActiveView('HOME');
     }
   }, []);
 
@@ -204,6 +205,7 @@ const App: React.FC = () => {
 
   const getTabBgColor = () => {
     if (isFocusMode) return 'bg-slate-950';
+    if (activeView === 'HOME') return 'bg-slate-50';
     if (activeView !== 'ASSESSMENT') return 'bg-slate-50';
     switch (activeTab) {
       case 'HOME': return 'bg-emerald-50/50';
@@ -255,6 +257,12 @@ const App: React.FC = () => {
         />
         <main className={`flex-1 relative z-10 transition-all duration-700 ${isFocusMode ? 'pt-0' : 'pt-6 md:pt-10 px-4 md:px-12'}`}>
           <div className={`mx-auto transition-all duration-700 ${isFocusMode ? 'max-w-full' : 'max-w-[1500px]'}`}>
+            {activeView === 'HOME' && (
+              <HomeDashboard 
+                fullState={state} 
+                onNavigate={(view) => setActiveView(view as ViewType)} 
+              />
+            )}
             {activeView === 'ASSESSMENT' && (
               <div className="animate-in">
                 {!isFocusMode && (

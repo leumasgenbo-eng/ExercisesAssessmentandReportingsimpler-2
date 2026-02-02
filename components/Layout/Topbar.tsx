@@ -3,7 +3,7 @@ import { AssessmentType, SchoolGroup, UserRole } from '../../types';
 import { SCHOOL_HIERARCHY, WEEK_COUNT, ACADEMIC_YEAR_RANGE } from '../../constants';
 
 interface TopbarProps {
-  activeView: 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
+  activeView: 'HOME' | 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
   onViewChange: (view: string) => void;
   activeTab: AssessmentType;
   onTabChange: (tab: AssessmentType) => void;
@@ -68,6 +68,7 @@ const Topbar: React.FC<TopbarProps> = ({
   };
 
   const portalOptions = [
+    { id: 'HOME', label: 'Home', icon: '🏠' },
     { id: 'ASSESSMENT', label: 'Assess', icon: '📝' },
     { id: 'PUPILS', label: 'Pupil', icon: '🎓' },
     { id: 'PLANNING', label: 'Plan', icon: '📅' },
@@ -80,7 +81,7 @@ const Topbar: React.FC<TopbarProps> = ({
       <div className="bg-sky-950 text-white shadow-xl">
         <div className="max-w-[1500px] mx-auto px-2 md:px-4 h-14 flex justify-between items-center gap-1">
           <div className="flex items-center gap-1 md:gap-3 overflow-hidden">
-            <div className="flex items-center justify-center w-8 h-8 md:w-11 md:h-11 bg-white/10 rounded-lg cursor-pointer shrink-0" onClick={() => onViewChange('ASSESSMENT')}>
+            <div className="flex items-center justify-center w-8 h-8 md:w-11 md:h-11 bg-white/10 rounded-lg cursor-pointer shrink-0" onClick={() => onViewChange('HOME')}>
               <span className="text-base md:text-xl">🏛️</span>
             </div>
             
