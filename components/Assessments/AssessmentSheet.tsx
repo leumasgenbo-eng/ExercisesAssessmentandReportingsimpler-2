@@ -43,6 +43,7 @@ const AssessmentSheet: React.FC<Props> = (props) => {
   /**
    * Sync Focus Mode with CAPI State
    * We trigger global isolation as soon as viewMode is INTERVIEW (CAPI)
+   * This hides all topbar tabs (CLASS, HOME, Daycare, Basic 1A, etc.)
    */
   useEffect(() => {
     if (viewMode === 'INTERVIEW') {
@@ -69,7 +70,7 @@ const AssessmentSheet: React.FC<Props> = (props) => {
             onMonthChange={props.onMonthChange}
             onNext={() => next('MODALITY')}
             onBack={() => {
-                setViewMode('TABLE'); // Reset view mode when going back to start
+                setViewMode('TABLE'); 
                 next('PROCESS');
             }}
           />
@@ -122,7 +123,7 @@ const AssessmentSheet: React.FC<Props> = (props) => {
             onExit={() => {
                setViewMode('TABLE');
                props.setIsFocusMode(false);
-               next('PROCESS'); // Return to protocol selection on exit
+               next('PROCESS'); 
             }}
           />
         );
@@ -136,7 +137,7 @@ const AssessmentSheet: React.FC<Props> = (props) => {
   return (
     <div className={`min-h-[500px] transition-all duration-700 ${isInterview ? 'bg-slate-950' : 'bg-white'}`}>
       <div className={`max-w-6xl mx-auto ${isInterview ? 'py-10' : 'py-6 md:py-8'}`}>
-        {/* Hide wizard navigation completely in CAPI mode */}
+        {/* Hide wizard navigation/breadcrumbs completely in CAPI mode */}
         {!isInterview && wizardStep !== 'SCORING' && (
           <div className="flex justify-center mb-6 md:mb-12 overflow-x-auto scrollbar-hide px-2">
             <div className="flex bg-slate-100 p-1 rounded-full shadow-inner border border-slate-200">

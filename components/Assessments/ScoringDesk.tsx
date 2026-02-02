@@ -134,13 +134,10 @@ const ScoringDesk: React.FC<Props> = ({
   };
 
   const isInterviewMode = viewMode === 'INTERVIEW';
+  const schoolName = managementData?.settings.name || "OFFICIAL NODE";
 
   return (
     <div className={`animate-in fade-in slide-in-from-bottom-4 duration-700 ${isInterviewMode ? 'pb-40' : 'pb-20'}`}>
-      {/* 
-          MANAGEMENT HEADER
-          Hidden completely in INTERVIEW (CAPI) mode.
-      */}
       {!isInterviewMode && (
         <div className="mb-6 md:mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 no-print border-b-2 border-slate-100 pb-6 md:pb-8">
           <div className="w-full md:w-auto">
@@ -148,7 +145,7 @@ const ScoringDesk: React.FC<Props> = ({
                <div className="flex flex-wrap items-center gap-3">
                   <span className="bg-slate-900 text-white text-[8px] md:text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-md">1: Class Assignment/ACTIVITIES</span>
                   <p className="text-[11px] md:text-base font-black text-slate-900 uppercase tracking-tighter">
-                      SCHOOL: UNITED BAYLOR A.
+                      SCHOOL: {schoolName}
                   </p>
                   <p className="text-[11px] md:text-base font-black text-slate-400 uppercase tracking-tighter">
                       CLS: ASSESSMENT SHEET
@@ -233,7 +230,6 @@ const ScoringDesk: React.FC<Props> = ({
         />
       )}
 
-      {/* FOOTER ACTION */}
       <div className={`fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 z-50 no-print w-[90%] md:w-auto`}>
         <button onClick={onExit} className="w-full md:w-auto bg-slate-950 text-white px-8 md:px-16 py-4 md:py-6 rounded-2xl md:rounded-full font-black uppercase text-[9px] md:text-[10px] tracking-[0.2em] md:tracking-[0.4em] shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4 md:gap-6 border border-white/10">
            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" /></svg>

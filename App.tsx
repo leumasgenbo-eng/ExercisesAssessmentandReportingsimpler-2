@@ -101,9 +101,6 @@ const App: React.FC = () => {
     });
   };
 
-  /**
-   * AUTHENTICATION HANDLER: Handles both session identification and node hydration
-   */
   const handleAuthenticate = (userSession: UserSession, hydratedState?: AppState) => {
     if (hydratedState) {
       setState(hydratedState);
@@ -111,7 +108,6 @@ const App: React.FC = () => {
       setActiveYear(settings.currentYear);
       setActiveTerm(settings.currentTerm);
       setActiveMonth(settings.activeMonth);
-      console.log(`Node Hydration Successful for ${userSession.nodeName}`);
     }
     setSession(userSession);
   };
@@ -207,12 +203,12 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'ASSESSMENT' && (
-            <div className="space-y-6">
+            <div className={`space-y-6 ${isFocusMode ? 'mt-0' : ''}`}>
               {!isFocusMode && (
                 <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
                    <div className="flex items-center gap-4">
                       <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
-                      <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: UNITED BAYLOR A. • CLS: ASSESSMENT SHEET</h2>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: {state.management.settings.name} • CLS: ASSESSMENT SHEET</h2>
                    </div>
                 </div>
               )}

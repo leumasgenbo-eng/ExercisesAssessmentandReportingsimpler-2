@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ManagementState, WeeklyMapping, PlanningRemarks, AppState } from '../../types';
 import { WEEK_COUNT } from '../../constants';
 
@@ -18,16 +17,13 @@ const REMARKS_OPTIONS: PlanningRemarks[] = [
 
 const PlanningPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => {
   const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [editingMapping, setEditingMapping] = useState<{ week: string; className: string; subject: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeUploadTarget, setActiveUploadTarget] = useState<{ className: string; subject: string } | null>(null);
+  const [editingMapping, setEditingMapping] = useState<WeeklyMapping | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const isOnline = navigator.onLine;
-  
-  // Paste Modal State
-  const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
-  const [pastedText, setPastedText] = useState('');
-  const [activePasteTarget, setActivePasteTarget] = useState<{ className: string; subject: string } | null>(null);
+  const [showBatchTools, setShowBatchTools] = useState(false);
+  const [batchInput, setBatchInput] = useState('');
+  const [batchTarget, setBatchTarget] = useState<{ className: string; subject: string } | null>(null);
+
+  const activeFacilitator = data.staff.find(s => s.id === selectedStaffId);
 
   const facilitatorDuties = useMemo(() => {
     if (!selectedStaffId) return [];
@@ -40,348 +36,202 @@ const PlanningPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => {
     );
   };
 
-  const getUnassignedMappings = (className: string, subject: string) => {
-    return (data.weeklyMappings || []).filter(wm => 
-      (wm.week === '' || wm.week === '0' || !wm.week) && 
-      wm.className === className && 
-      wm.subject === subject
-    );
+  const handleUpdateMapping = (id: string, field: keyof WeeklyMapping, value: any) => {
+    const exists = data.weeklyMappings.some(m => m.id === id);
+    if (exists) {
+      const newMappings = (data.weeklyMappings || []).map(wm => 
+        wm.id === id ? { ...wm, [field]: value } : wm
+      );
+      onUpdate({ ...data, weeklyMappings: newMappings });
+    } else if (editingMapping) {
+      const newMapping = { ...editingMapping, [field]: value };
+      setEditingMapping(newMapping);
+      onUpdate({ ...data, weeklyMappings: [...data.weeklyMappings, newMapping] });
+    }
   };
 
-  const updateIndividualMapping = (id: string, field: keyof WeeklyMapping, value: any) => {
-    const newMappings = (data.weeklyMappings || []).map(wm => 
-      wm.id === id ? { ...wm, [field]: value } : wm
-    );
-    onUpdate({ ...data, weeklyMappings: newMappings });
-  };
-
-  const clearBroadsheet = (className: string, subject: string) => {
-    if (!confirm(`Are you sure you want to RESET the broadsheet for ${subject} in ${className}? All planning rows will be removed.`)) return;
-    const newMappings = (data.weeklyMappings || []).filter(wm => 
-      !(wm.className === className && wm.subject === subject)
-    );
-    onUpdate({ ...data, weeklyMappings: newMappings });
-  };
-
-  const clearAllFacilitatorPlans = () => {
-    if (!selectedStaffId) return;
-    const staff = data.staff.find(s => s.id === selectedStaffId);
-    if (!confirm(`CRITICAL: Remove ALL broadsheet plans for ${staff?.name}? This action cannot be undone.`)) return;
-    
-    const staffDuties = data.mappings.filter(m => m.staffId === selectedStaffId);
-    const staffDutyKeys = staffDuties.map(d => {
-      const subName = data.subjects.find(s => s.id === d.subjectId)?.name || d.subjectId;
-      return `${d.className}|${subName}`;
-    });
-
-    const newMappings = (data.weeklyMappings || []).filter(wm => {
-      const key = `${wm.className}|${wm.subject}`;
-      return !staffDutyKeys.includes(key);
-    });
-
-    onUpdate({ ...data, weeklyMappings: newMappings });
-  };
-
-  const deleteIndividualMapping = (id: string, hardDelete: boolean = false) => {
-    const message = hardDelete 
-      ? "Are you sure you want to PERMANENTLY DELETE this specific strand/aspect?" 
-      : "Move this aspect to the Curriculum Repository? It will be removed from this week but saved for later use.";
-    
-    if (!confirm(message)) return;
-
-    let newMappings: WeeklyMapping[];
-    if (hardDelete) {
-      newMappings = (data.weeklyMappings || []).filter(wm => wm.id !== id);
+  const openEditor = (week: string, className: string, subject: string) => {
+    const existing = getMappingsForWeek(week, className, subject)[0];
+    if (existing) {
+      setEditingMapping(existing);
     } else {
-      newMappings = (data.weeklyMappings || []).map(wm => 
-        wm.id === id ? { ...wm, week: '' } : wm
-      );
-    }
-    onUpdate({ ...data, weeklyMappings: newMappings });
-  };
-
-  const addStrandToWeek = (week: string, className: string, subject: string, strandName: string = '') => {
-    const newMapping: WeeklyMapping = {
-      id: `plan-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      className,
-      subject,
-      week,
-      strand: strandName,
-      substrand: '',
-      contentStandard: '',
-      indicators: '',
-      resources: [],
-      pages: '',
-      areasCovered: '',
-      remarks: '',
-      classWorkCount: 5,
-      homeWorkCount: 5,
-      projectWorkCount: 1
-    };
-    return newMapping;
-  };
-
-  const handleGlobalSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      const msg = isOnline ? "Academic Data Secured Online." : "Academic Data Cached Locally (Offline).";
-      alert(msg);
-    }, 600);
-  };
-
-  const bulkApplyDates = (className: string, subject: string) => {
-    const mappings = (data.weeklyMappings || []).filter(wm => wm.className === className && wm.subject === subject);
-    const week1 = mappings.find(wm => wm.week === "1");
-    if (!week1 || !week1.weekStartDate || !week1.weekEndDate) {
-      alert("Please set dates for Week 1 first.");
-      return;
-    }
-    const updated = (data.weeklyMappings || []).map(wm => {
-      if (wm.className === className && wm.subject === subject && wm.week && wm.week !== "0") {
-        return { ...wm, weekStartDate: week1.weekStartDate, weekEndDate: week1.weekEndDate };
-      }
-      return wm;
-    });
-    onUpdate({ ...data, weeklyMappings: updated });
-  };
-
-  const triggerUpload = (className: string, subject: string) => {
-    setActiveUploadTarget({ className, subject });
-    fileInputRef.current?.click();
-  };
-
-  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeUploadTarget) return;
-    setActiveUploadTarget(null);
-    alert("Import logic active. File processed.");
-  };
-
-  const triggerPaste = (className: string, subject: string) => {
-    setActivePasteTarget({ className, subject });
-    setIsPasteModalOpen(true);
-  };
-
-  const processPastedTopics = () => {
-    if (!activePasteTarget || !pastedText.trim()) return;
-
-    const lines = pastedText.split('\n').filter(line => line.trim() !== '');
-    if (lines.length === 0) {
-      alert("Please paste data to process.");
-      return;
-    }
-
-    const newMappings: WeeklyMapping[] = lines.map((line, idx) => {
-      const parts = line.split(/\t|,|;|\|/).map(p => p.trim());
-      const firstPart = parts[0] || '';
-      
-      const isDatePresent = firstPart.includes(' to ') || 
-                           (firstPart.includes('-') && firstPart.length > 7) || 
-                           (firstPart.includes('/') && firstPart.length > 5);
-
-      let weekStartDate = '';
-      let weekEndDate = '';
-      let weekNum = '';
-      let strand = '';
-      let substrand = '';
-      let indicators = '';
-      let contentStandard = '';
-      let resourcesRaw = '';
-      let statusRaw = '';
-
-      if (isDatePresent) {
-        const timeline = parts[0] || '';
-        if (timeline.includes(' to ')) {
-          const [start, end] = timeline.split(' to ');
-          weekStartDate = start;
-          weekEndDate = end;
-        } else if (timeline.includes('-')) {
-          const bits = timeline.split('-');
-          if (bits.length >= 2) {
-            weekStartDate = bits[0].trim();
-            weekEndDate = bits[1].trim();
-          }
-        }
-        weekNum = parts[1] || '';
-        strand = parts[2] || '';
-        substrand = parts[3] || '';
-        contentStandard = parts[4] || '';
-        indicators = parts[5] || '';
-        resourcesRaw = parts[6] || '';
-        statusRaw = parts[7] || '';
-      } else {
-        weekNum = parts[0] || '';
-        if (weekNum.toLowerCase().startsWith('week')) {
-          weekNum = weekNum.replace(/week\s*/i, '').trim();
-        }
-        strand = parts[1] || '';
-        substrand = parts[2] || '';
-        contentStandard = parts[3] || '';
-        indicators = parts[4] || '';
-        resourcesRaw = parts[5] || '';
-        statusRaw = parts[6] || '';
-      }
-
-      const resources = resourcesRaw ? resourcesRaw.split(/&|,/).map(r => r.trim()).filter(r => r) : [];
-      let remarks: PlanningRemarks = '';
-      const matchedStatus = REMARKS_OPTIONS.find(opt => 
-        statusRaw.toLowerCase().includes(opt.toLowerCase())
-      );
-      if (matchedStatus) remarks = matchedStatus;
-
-      return {
-        id: `plan-p-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
-        className: activePasteTarget.className,
-        subject: activePasteTarget.subject,
-        week: weekNum,
-        weekStartDate,
-        weekEndDate,
-        strand: strand.toUpperCase(),
-        substrand: substrand,
-        indicators: indicators,
-        contentStandard: contentStandard,
-        resources: resources,
-        remarks: remarks,
+      setEditingMapping({
+        id: `plan-${Date.now()}-${Math.random()}`,
+        className,
+        subject,
+        week,
+        strand: '',
+        substrand: '',
+        contentStandard: '',
+        indicators: '',
+        resources: [],
         pages: '',
         areasCovered: '',
+        remarks: '',
+        classWorkCount: 5,
+        homeWorkCount: 5,
+        projectWorkCount: 1
+      });
+    }
+  };
+
+  const processBatchCurriculum = () => {
+    if (!batchInput.trim() || !batchTarget) return;
+    const lines = batchInput.split('\n').filter(l => l.trim() !== '');
+    const newPlans: WeeklyMapping[] = lines.map((line, idx) => {
+      const [strand, substrand, standard, indicator] = line.split(/[|\t,]+/).map(s => s.trim());
+      return {
+        id: `batch-${Date.now()}-${idx}`,
+        className: batchTarget.className,
+        subject: batchTarget.subject,
+        week: (idx + 1).toString(),
+        strand: strand || '',
+        substrand: substrand || '',
+        contentStandard: standard || '',
+        indicators: indicator || '',
+        resources: [],
+        pages: '',
+        areasCovered: '',
+        remarks: '',
         classWorkCount: 5,
         homeWorkCount: 5,
         projectWorkCount: 1
       };
     });
 
-    onUpdate({ 
-      ...data, 
-      weeklyMappings: [...(data.weeklyMappings || []), ...newMappings] 
-    });
+    const filtered = (data.weeklyMappings || []).filter(wm => 
+      !(wm.className === batchTarget.className && wm.subject === batchTarget.subject)
+    );
 
-    setIsPasteModalOpen(false);
-    setPastedText('');
-    setActivePasteTarget(null);
+    onUpdate({ ...data, weeklyMappings: [...filtered, ...newPlans] });
+    setShowBatchTools(false);
+    setBatchInput('');
+    alert("Academic Roadmap Synchronized.");
   };
 
-  const getStatusColor = (remarks: string) => {
-    switch (remarks) {
-      case 'Completed successfully': return 'text-emerald-600 bg-emerald-50 border-emerald-100';
-      case 'Partially completed': return 'text-amber-600 bg-amber-50 border-amber-100';
-      default: return 'text-slate-400 bg-slate-50 border-slate-100';
-    }
+  const downloadSubjectRoadmap = (className: string, subject: string) => {
+    const headers = ['Week', 'Strand', 'Sub-Strand', 'Content Standard', 'Indicators', 'Status'];
+    const road = (data.weeklyMappings || [])
+      .filter(m => m.className === className && m.subject === subject)
+      .sort((a,b) => parseInt(a.week) - parseInt(b.week));
+    
+    const rows = road.map(r => [r.week, r.strand, r.substrand, r.contentStandard, r.indicators, r.remarks]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Roadmap_${className}_${subject}.csv`;
+    link.click();
+  };
+
+  const handleGlobalSave = () => {
+    setIsSaving(true);
+    setTimeout(() => {
+      setIsSaving(false);
+      alert("Academic Roadmaps Secured.");
+    }, 800);
   };
 
   return (
-    <div className="animate-in space-y-12 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 px-4">
-        <div>
-           <div className="inline-block bg-slate-900 text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 shadow-lg">
+    <div className="animate-in space-y-8 pb-40 px-4 md:px-0">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b-2 border-slate-900 pb-8">
+        <div className="space-y-2">
+           <div className="inline-block bg-slate-950 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[0.3em] shadow-xl">
              1: Class Assignment/ACTIVITIES
            </div>
-           <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter mb-1">UNITED BAYLOR A.</h2>
-           <div className="flex items-center gap-4">
-             <button 
-               onClick={handleGlobalSave}
-               className={`px-8 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg ${isSaving ? 'bg-amber-500 text-white animate-pulse' : (isOnline ? 'bg-sky-950 text-white' : 'bg-amber-600 text-white')} hover:opacity-90`}
-             >
-               {isSaving ? 'Processing...' : (isOnline ? 'Save Online' : 'Cache Offline')}
+           <h2 className="text-4xl md:text-5xl font-black text-slate-950 uppercase tracking-tighter leading-none">{data.settings.name}</h2>
+           <div className="flex flex-wrap items-center gap-4">
+             <button onClick={handleGlobalSave} className={`px-8 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all shadow-xl ${isSaving ? 'bg-amber-500 text-white animate-pulse' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+               {isSaving ? 'PROCESSING...' : 'Save All Data'}
              </button>
-             {selectedStaffId && (
-                <button 
-                  onClick={clearAllFacilitatorPlans}
-                  className="px-6 py-2.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 hover:text-white transition-all shadow-sm"
-                >
-                  Clear Sheet
-                </button>
-             )}
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">CLS: ASSESSMENT SHEET</p>
+             <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] ml-4 hidden md:block">CLS: ASSESSMENT SHEET</p>
            </div>
         </div>
         
-        <div className="bg-white p-4 rounded-[2rem] border border-slate-200 shadow-xl flex items-center gap-4">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Logged as:</label>
-          <select 
-            className="bg-transparent font-black text-slate-900 uppercase text-xs focus:outline-none appearance-none cursor-pointer pr-10 min-w-[200px]"
-            value={selectedStaffId}
-            onChange={(e) => setSelectedStaffId(e.target.value)}
-          >
-            <option value="">-- SELECT FACILITATOR --</option>
+        <div className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-950 shadow-2xl flex items-center gap-6 min-w-[280px]">
+          <div className="text-right flex-1">
+             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Identity Node:</label>
+             <div className="text-xl font-black text-indigo-600 uppercase tracking-tight truncate">{activeFacilitator?.name || 'Awaiting Authenticity'}</div>
+          </div>
+          <select className="bg-slate-950 text-white font-black text-[9px] p-3 rounded-xl outline-none cursor-pointer uppercase tracking-widest hover:bg-black transition-all" value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)}>
+            <option value="">Switch Identity</option>
             {data.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       </div>
 
-      <input type="file" ref={fileInputRef} onChange={handleCSVUpload} accept=".csv" className="hidden" />
-
       {!selectedStaffId ? (
-        <div className="py-40 text-center opacity-20 flex flex-col items-center">
-          <div className="text-7xl mb-6">📅</div>
-          <p className="font-black uppercase tracking-widest text-xs text-slate-950">Select facilitator name to access active roadmap</p>
+        <div className="py-32 text-center opacity-10 flex flex-col items-center animate-pulse">
+          <div className="text-[8rem] mb-6">🗓️</div>
+          <p className="font-black uppercase tracking-[0.5em] text-sm text-slate-950 px-12">Identify facilitator to generate active roadmap</p>
         </div>
       ) : (
-        <div className="space-y-20">
+        <div className="space-y-16">
           {facilitatorDuties.map((duty, idx) => {
             const subjectName = data.subjects.find(s => s.id === duty.subjectId)?.name || duty.subjectId;
-            const unassigned = getUnassignedMappings(duty.className, subjectName);
 
             return (
-              <div key={idx} className="space-y-8 animate-in">
-                <div className="bg-white rounded-[3rem] shadow-2xl border border-slate-200 overflow-hidden">
-                  <div className="p-10 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-8 bg-white sticky top-0 z-30">
-                    <div>
-                      <div className="bg-slate-900 text-white text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-3 inline-block">Active Broadsheet</div>
-                      <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{subjectName} <span className="text-sky-600">at</span> {duty.className}</h3>
+              <div key={idx} className="animate-in space-y-6">
+                <div className="bg-white rounded-[3rem] shadow-2xl border-2 border-slate-950 overflow-hidden">
+                  <div className="p-8 border-b-2 border-slate-950 flex flex-col md:flex-row justify-between items-center gap-6 bg-white sticky top-0 z-30">
+                    <div className="text-center md:text-left">
+                      <div className="bg-indigo-600 text-white text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em] mb-2 inline-block">Academic Roadmap</div>
+                      <h3 className="text-2xl md:text-3xl font-black text-slate-950 uppercase tracking-tighter leading-none">
+                        {subjectName} <span className="text-indigo-500 mx-2 font-light">@</span> {duty.className}
+                      </h3>
                     </div>
-                    <div className="flex flex-wrap gap-2 no-print justify-center">
-                      <button onClick={() => bulkApplyDates(duty.className, subjectName)} className="bg-white border-2 border-indigo-100 text-indigo-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Sync Timeline</button>
-                      <button onClick={() => triggerPaste(duty.className, subjectName)} className="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all">Paste</button>
-                      <button onClick={() => clearBroadsheet(duty.className, subjectName)} className="bg-rose-50 text-rose-600 px-6 py-3 rounded-2xl text-[10px] font-black uppercase border border-rose-100 hover:bg-rose-600 hover:text-white transition-all">Reset</button>
+                    <div className="flex gap-2">
+                       <button onClick={() => { setBatchTarget({ className: duty.className, subject: subjectName }); setShowBatchTools(true); }} className="bg-slate-50 border-2 border-slate-200 text-slate-400 px-5 py-2.5 rounded-xl font-black uppercase text-[9px] hover:bg-indigo-600 hover:text-white transition-all shadow-sm">Rapid Ingestion Tool ⚡</button>
+                       <button onClick={() => downloadSubjectRoadmap(duty.className, subjectName)} className="bg-slate-950 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[9px] shadow-xl hover:bg-black transition-all">Download Roadmap ⬇️</button>
                     </div>
                   </div>
 
                   <div className="overflow-x-auto scrollbar-hide">
-                    <table className="w-full border-collapse min-w-[1400px]">
+                    <table className="w-full border-collapse min-w-[1200px]">
                       <thead>
-                        <tr className="bg-slate-50 text-slate-500 border-b-2 border-slate-200 text-[10px] font-black uppercase tracking-widest">
-                          <th className="p-6 text-left w-40">Timeline</th>
-                          <th className="p-6 text-center w-20">Wk</th>
-                          <th className="p-6 text-left w-64">Strand Particulars</th>
-                          <th className="p-6 text-left w-64">Aspects / Sub-Strands</th>
-                          <th className="p-6 text-left w-48">Content Standard</th>
-                          <th className="p-6 text-left w-32">Indic.</th>
-                          <th className="p-6 text-left w-48">Resources</th>
-                          <th className="p-6 text-center w-40">Status</th>
+                        <tr className="bg-slate-50 text-slate-400 border-b border-slate-200 text-[9px] font-black uppercase tracking-widest">
+                          <th className="p-5 text-left w-48">Beginning - Ending</th>
+                          <th className="p-5 text-center w-16">Wk</th>
+                          <th className="p-5 text-left w-64">Strand Particulars</th>
+                          <th className="p-5 text-left w-64">Aspects / Sub-Strands</th>
+                          <th className="p-5 text-left w-48">Content Standard</th>
+                          <th className="p-5 text-left w-40">Indicators</th>
+                          <th className="p-5 text-center w-48">Remarks/Status</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {Array.from({ length: WEEK_COUNT }, (_, i) => (i + 1).toString()).map(wk => {
-                          const plans = getMappingsForWeek(wk, duty.className, subjectName);
-                          const mergedStrands = Array.from(new Set(plans.map(p => p.strand).filter(v => v))).join(' & ');
-                          const mergedSubstrands = plans.map(p => p.substrand).filter(v => v).join(' • ');
-                          const mergedStandards = plans.map(p => p.contentStandard).filter(v => v).join(', ');
-                          const mergedIndicators = plans.map(p => p.indicators).filter(v => v).join(', ');
-                          const mergedResources = Array.from(new Set(plans.flatMap(p => p.resources).filter(v => v))).join(', ');
-                          const remarks = plans[0]?.remarks;
-
+                          const plan = getMappingsForWeek(wk, duty.className, subjectName)[0];
                           return (
-                            <tr key={wk} onClick={() => setEditingMapping({ week: wk, className: duty.className, subject: subjectName })} className="group hover:bg-slate-50 transition-colors cursor-pointer">
-                              <td className="p-6">
-                                <div className="text-[10px] font-black text-slate-900">{plans[0]?.weekStartDate || <span className="text-slate-200">Set Date</span>}</div>
-                                <div className="text-[8px] font-bold text-slate-300 uppercase my-0.5">to</div>
-                                <div className="text-[10px] font-black text-slate-900">{plans[0]?.weekEndDate || <span className="text-slate-200">Set Date</span>}</div>
+                            <tr key={wk} onClick={() => openEditor(wk, duty.className, subjectName)} className="group/row hover:bg-indigo-50/30 transition-all cursor-pointer h-20">
+                              <td className="p-5">
+                                <div className="text-[9px] font-black text-slate-950 uppercase">{plan?.weekStartDate || <span className="text-slate-200 italic">No Date Set</span>}</div>
+                                <div className="text-[9px] font-black text-slate-950 uppercase mt-1">{plan?.weekEndDate || <span className="text-slate-200 italic">No Date Set</span>}</div>
                               </td>
-                              <td className="p-6 text-center">
-                                <div className={`w-10 h-10 rounded-xl mx-auto flex items-center justify-center font-black text-xs transition-all border-2 ${plans.length > 0 ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-100 text-slate-200'}`}>
+                              <td className="p-5 text-center">
+                                <div className={`w-8 h-8 rounded-lg mx-auto flex items-center justify-center font-black text-xs border-2 ${plan ? 'bg-slate-950 text-white border-slate-950' : 'bg-white border-slate-100 text-slate-200'}`}>
                                   {wk}
                                 </div>
                               </td>
-                              <td className="p-6"><div className="text-[11px] font-black text-slate-900 uppercase line-clamp-2 leading-tight">{mergedStrands || <span className="text-slate-200 font-bold italic">Empty Week</span>}</div></td>
-                              <td className="p-6"><div className="text-[10px] font-bold text-sky-700 uppercase line-clamp-2 leading-tight">{mergedSubstrands || '---'}</div></td>
-                              <td className="p-6"><div className="text-[10px] font-black text-slate-600 uppercase truncate">{mergedStandards || '---'}</div></td>
-                              <td className="p-6"><div className="text-[10px] font-black text-indigo-500">{mergedIndicators || '---'}</div></td>
-                              <td className="p-6"><div className="text-[10px] font-bold text-slate-400 italic truncate max-w-[200px]">{mergedResources || '---'}</div></td>
-                              <td className="p-6 text-center">
-                                <span className={`inline-block px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border tracking-tight ${getStatusColor(remarks || '')}`}>
-                                  {remarks || 'Pending'}
-                                </span>
+                              <td className="p-5"><div className="text-[11px] font-black text-slate-950 uppercase line-clamp-2 leading-tight">{plan?.strand || '---'}</div></td>
+                              <td className="p-5"><div className="text-[10px] font-bold text-indigo-600 uppercase line-clamp-2 leading-tight">{plan?.substrand || '---'}</div></td>
+                              <td className="p-5"><div className="text-[9px] font-black text-slate-400 uppercase line-clamp-2 leading-tight">{plan?.contentStandard || '---'}</div></td>
+                              <td className="p-5"><div className="text-[9px] font-black text-emerald-600 truncate max-w-[100px]">{plan?.indicators || '---'}</div></td>
+                              <td className="p-5 text-center">
+                                {plan ? (
+                                   <select 
+                                     onClick={(e) => e.stopPropagation()}
+                                     className={`w-full bg-white border-2 p-2 rounded-lg font-black uppercase text-[8px] outline-none transition-all ${plan.remarks ? 'border-emerald-100 text-emerald-600' : 'border-slate-100 text-slate-400'}`}
+                                     value={plan.remarks}
+                                     onChange={(e) => handleUpdateMapping(plan.id, 'remarks', e.target.value)}
+                                   >
+                                     <option value="">Pending</option>
+                                     {REMARKS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                   </select>
+                                ) : (
+                                  <span className="text-[8px] font-black text-slate-200 uppercase">Initialize Empty Week</span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -390,181 +240,96 @@ const PlanningPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => {
                     </table>
                   </div>
                 </div>
-
-                {/* REPOSITORY SECTION */}
-                <div className="bg-slate-100 rounded-[3.5rem] p-12 border-2 border-dashed border-slate-300">
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-10">
-                    <div>
-                      <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Curriculum Repository</h4>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Strands and topics currently awaiting assignment</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <button onClick={() => triggerPaste(duty.className, subjectName)} className="bg-indigo-50 text-indigo-600 border-2 border-indigo-100 hover:bg-indigo-600 hover:text-white px-8 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-sm transition-all">Magic Paste</button>
-                      <button onClick={() => {
-                        const newM = addStrandToWeek('', duty.className, subjectName);
-                        onUpdate({ ...data, weeklyMappings: [...(data.weeklyMappings || []), newM] });
-                      }} className="bg-white border-2 border-slate-200 text-slate-900 hover:bg-slate-900 hover:text-white px-8 py-4 rounded-3xl text-[10px] font-black uppercase shadow-sm transition-all">New Strand +</button>
-                    </div>
-                  </div>
-                  {unassigned.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {unassigned.map(strand => (
-                        <div key={strand.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-lg group hover:-translate-y-1 transition-all">
-                          <div className="flex justify-between items-start mb-6">
-                            <span className="bg-sky-50 text-sky-700 text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-[0.2em]">Repository Row</span>
-                            <button onClick={() => deleteIndividualMapping(strand.id, true)} className="text-slate-200 hover:text-rose-500 transition-colors">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </div>
-                          <div className="space-y-6">
-                            <div>
-                              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">Topic / Strand</label>
-                              <div className="text-sm font-black text-slate-900 uppercase truncate">{strand.strand || 'No Topic'}</div>
-                            </div>
-                            <div className="pt-6 border-t border-slate-100">
-                               <label className="text-[8px] font-black text-sky-500 uppercase tracking-widest mb-1.5 block">Assign to Week</label>
-                               <select 
-                                 className="w-full bg-slate-50 border-none p-3 rounded-2xl font-black text-slate-900 uppercase text-[10px] outline-none cursor-pointer"
-                                 value={strand.week || ''}
-                                 onChange={(e) => updateIndividualMapping(strand.id, 'week', e.target.value)}
-                               >
-                                 <option value="">- PICK -</option>
-                                 {Array.from({ length: WEEK_COUNT }, (_, i) => (i + 1).toString()).map(w => <option key={w} value={w}>Week {w}</option>)}
-                               </select>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-24 text-center opacity-20 flex flex-col items-center">
-                      <div className="text-6xl mb-6">📥</div>
-                      <p className="font-black uppercase tracking-widest text-[10px]">Curriculum repository is empty</p>
-                    </div>
-                  )}
-                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Editor Modal */}
-      {editingMapping && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="p-10 border-b-2 border-slate-50 flex justify-between items-start shrink-0">
-               <div>
-                  <div className="bg-indigo-600 text-white text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest mb-3 inline-block">Week {editingMapping.week} Editor</div>
-                  <h4 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">{editingMapping.subject} <span className="text-slate-300">/</span> {editingMapping.className}</h4>
-               </div>
-               <button onClick={() => setEditingMapping(null)} className="p-3 bg-slate-300 text-slate-950 hover:text-rose-500 rounded-2xl transition-all">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
-               </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-10 space-y-10 scrollbar-hide">
-               {getMappingsForWeek(editingMapping.week, editingMapping.className, editingMapping.subject).map((aspect, idx) => (
-                  <div key={aspect.id} className="bg-slate-50 p-10 rounded-[3rem] border border-slate-100 relative group/aspect">
-                     <div className="absolute -top-3 left-10 bg-slate-900 text-white text-[9px] font-black px-5 py-1.5 rounded-full uppercase tracking-widest">Aspect {idx + 1}</div>
-                     
-                     <div className="grid grid-cols-2 gap-8 mb-8">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Timeline Start</label>
-                           <input type="date" className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" value={aspect.weekStartDate || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'weekStartDate', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Timeline End</label>
-                           <input type="date" className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" value={aspect.weekEndDate || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'weekEndDate', e.target.value)} />
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Strand Particulars</label>
-                           <input className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" placeholder="Main Topic..." value={aspect.strand || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'strand', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Aspects / Sub-Strands</label>
-                           <input className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" placeholder="Details..." value={aspect.substrand || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'substrand', e.target.value)} />
-                        </div>
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Content Standard</label>
-                           <input className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" placeholder="B7.1.1.1..." value={aspect.contentStandard || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'contentStandard', e.target.value)} />
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Indicators</label>
-                           <input className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm" placeholder="M1.1, M1.2..." value={aspect.indicators || ''} onChange={(e) => updateIndividualMapping(aspect.id, 'indicators', e.target.value)} />
-                        </div>
-                     </div>
-
-                     <div className="space-y-2 mb-8">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Resources</label>
-                        <textarea className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm h-24 resize-none" placeholder="Textbooks, tools, digital resources..." value={(aspect.resources || []).join(', ')} onChange={(e) => updateIndividualMapping(aspect.id, 'resources', e.target.value.split(',').map(s => s.trim()))} />
-                     </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Delivery Status</label>
-                           <select className="w-full bg-white border-2 border-transparent focus:border-indigo-500 p-4 rounded-2xl font-black text-slate-900 uppercase text-xs shadow-sm appearance-none outline-none" value={aspect.remarks} onChange={(e) => updateIndividualMapping(aspect.id, 'remarks', e.target.value)}>
-                              <option value="">-- PICK STATUS --</option>
-                              {REMARKS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                           </select>
-                        </div>
-                        <button 
-                          onClick={() => deleteIndividualMapping(aspect.id, false)} 
-                          className="w-full py-4 rounded-2xl border-2 border-amber-200 text-amber-600 font-black uppercase text-[10px] hover:bg-amber-600 hover:text-white hover:border-amber-600 transition-all flex items-center justify-center gap-2"
-                        >
-                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                           Move to Repository
-                        </button>
-                     </div>
-                  </div>
-               ))}
-               
-               <button onClick={() => {
-                 const newM = addStrandToWeek(editingMapping.week, editingMapping.className, editingMapping.subject);
-                 onUpdate({ ...data, weeklyMappings: [...(data.weeklyMappings || []), newM] });
-               }} className="w-full py-6 border-4 border-dashed border-slate-100 rounded-[3rem] text-slate-300 font-black uppercase text-xs hover:border-indigo-200 hover:text-indigo-300 transition-all flex items-center justify-center gap-3">
-                  <span className="text-2xl">+</span> Add Additional Aspect for this Week
-               </button>
-            </div>
-
-            <div className="p-10 border-t-2 border-slate-50 shrink-0 bg-slate-50/50 flex gap-4">
-               <button onClick={() => setEditingMapping(null)} className="flex-1 py-5 bg-slate-900 text-white rounded-[2rem] font-black uppercase text-xs shadow-2xl hover:bg-black transition-all">Secure Changes & Exit</button>
-            </div>
-          </div>
+      {/* RAPID INGESTION MODAL */}
+      {showBatchTools && batchTarget && (
+        <div className="fixed inset-0 z-[6000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-md animate-in fade-in">
+           <div className="bg-white rounded-[3rem] p-10 w-full max-w-4xl shadow-2xl border-4 border-slate-900">
+              <div className="flex justify-between items-start mb-8 border-b-2 border-slate-50 pb-6">
+                 <div>
+                    <h4 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Rapid Curriculum Ingestion</h4>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-1">Ingesting into Node: {batchTarget.subject} @ {batchTarget.className}</p>
+                 </div>
+                 <button onClick={() => setShowBatchTools(false)} className="text-slate-300 hover:text-rose-500 transition-all p-3 bg-slate-50 rounded-full"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg></button>
+              </div>
+              <div className="space-y-6">
+                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                    Protocol: Paste curriculum data below. Each line represents one week.<br/>
+                    Format: <span className="text-slate-950">Strand | Sub-Strand | Content Standard | Indicator Codes</span>
+                 </p>
+                 <textarea 
+                   className="w-full bg-slate-50 border-4 border-slate-100 p-8 rounded-[2.5rem] font-black text-indigo-600 text-xs focus:border-indigo-600 outline-none h-[300px] resize-none shadow-inner"
+                   placeholder="Example:&#10;Topic A | Sub-topic | NA1.1 | I1, I2&#10;Topic B | Sub-topic | NA2.1 | I3"
+                   value={batchInput}
+                   onChange={(e) => setBatchInput(e.target.value)}
+                 />
+                 <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => setShowBatchTools(false)} className="py-5 bg-slate-50 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Discard</button>
+                    <button onClick={processBatchCurriculum} className="py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-indigo-700 transition-all">Synchronize Roadmap</button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
 
-      {/* PASTE MODAL */}
-      {isPasteModalOpen && (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-sky-950/80 backdrop-blur-md animate-in fade-in duration-300">
-           <div className="bg-white rounded-[3rem] p-8 md:p-12 w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-300 border-2 border-indigo-100">
-              <div className="flex justify-between items-start mb-8">
+      {/* WEEKLY INDIVIDUAL EDITOR */}
+      {editingMapping && (
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-6 md:p-12 bg-slate-950/95 backdrop-blur-3xl animate-in fade-in">
+           <div className="bg-white rounded-[4rem] p-10 md:p-14 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-4 border-slate-900">
+              <div className="flex justify-between items-start mb-8 border-b-2 border-slate-50 pb-6 shrink-0">
                  <div>
-                    <h4 className="text-2xl font-black text-indigo-950 uppercase tracking-tighter leading-none mb-1">Curriculum Topic Paste</h4>
-                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Multi-column data processing</p>
+                    <h4 className="text-3xl font-black text-slate-950 uppercase tracking-tighter">Academic Shard Editor</h4>
+                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mt-1">Week {editingMapping.week} • {editingMapping.subject} @ {editingMapping.className}</p>
                  </div>
-                 <button onClick={() => setIsPasteModalOpen(false)} className="text-slate-300 hover:text-rose-500 transition-colors p-2 bg-slate-50 rounded-full"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                 <button onClick={() => setEditingMapping(null)} className="text-slate-300 hover:text-rose-500 transition-all p-3 bg-slate-50 rounded-full">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
+                 </button>
               </div>
 
-              <div className="space-y-6">
-                 <textarea 
-                    className="w-full bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 p-6 rounded-[2rem] font-black text-indigo-900 text-[10px] focus:outline-none resize-none h-64 shadow-inner whitespace-pre overflow-x-auto"
-                    placeholder="Example: 1	Numbers	Fractions	B7.1.1.1	M1.1"
-                    value={pastedText}
-                    onChange={(e) => setPastedText(e.target.value)}
-                    autoFocus
-                 />
-
-                 <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setIsPasteModalOpen(false)} className="py-4 border-2 border-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[11px] hover:bg-slate-50 transition-all">Cancel</button>
-                    <button onClick={processPastedTopics} className="py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-[11px] shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">Import Table</button>
+              <div className="flex-1 overflow-y-auto pr-6 space-y-8 scrollbar-hide">
+                 <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Timeline Start</label>
+                       <input type="date" className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-xl font-black text-slate-900 text-xs focus:border-indigo-500 outline-none" value={editingMapping.weekStartDate || ''} onChange={(e) => handleUpdateMapping(editingMapping.id, 'weekStartDate', e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Timeline End</label>
+                       <input type="date" className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-xl font-black text-slate-900 text-xs focus:border-indigo-500 outline-none" value={editingMapping.weekEndDate || ''} onChange={(e) => handleUpdateMapping(editingMapping.id, 'weekEndDate', e.target.value)} />
+                    </div>
                  </div>
+
+                 <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-6">
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Strand Particulars</label>
+                          <textarea className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black text-slate-950 text-xs outline-none h-24 resize-none uppercase" value={editingMapping.strand} onChange={(e) => handleUpdateMapping(editingMapping.id, 'strand', e.target.value)} />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Sub-Strand / Aspect</label>
+                          <textarea className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black text-indigo-600 text-xs outline-none h-24 resize-none uppercase" value={editingMapping.substrand} onChange={(e) => handleUpdateMapping(editingMapping.id, 'substrand', e.target.value)} />
+                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Content Standard</label>
+                          <textarea className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-bold text-slate-900 text-xs outline-none h-24 resize-none" value={editingMapping.contentStandard} onChange={(e) => handleUpdateMapping(editingMapping.id, 'contentStandard', e.target.value)} />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Indicator Codes</label>
+                          <textarea className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black text-emerald-600 text-xs outline-none h-24 resize-none" value={editingMapping.indicators} onChange={(e) => handleUpdateMapping(editingMapping.id, 'indicators', e.target.value)} />
+                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="mt-10 pt-8 border-t-2 border-slate-50 shrink-0 flex gap-4">
+                 <button onClick={() => setEditingMapping(null)} className="flex-1 py-5 bg-slate-50 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-all">Close</button>
+                 <button onClick={() => setEditingMapping(null)} className="flex-[2] bg-slate-950 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-2xl hover:bg-black transition-all">Secured Log Entry</button>
               </div>
            </div>
         </div>

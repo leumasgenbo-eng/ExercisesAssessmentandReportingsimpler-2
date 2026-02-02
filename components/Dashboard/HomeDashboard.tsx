@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState } from 'react';
-import { AppState, MasterPupilEntry, UserRole } from '../../types';
+import { AppState, MasterPupilEntry, UserRole, UserSession } from '../../types';
 import { SCHOOL_NAME } from '../../constants';
 
 interface HomeDashboardProps {
@@ -8,9 +7,10 @@ interface HomeDashboardProps {
   onNavigate: (view: any) => void;
   userRole: UserRole;
   onAnnouncementPost?: (text: string) => void;
+  session?: UserSession | null;
 }
 
-const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, userRole, onAnnouncementPost }) => {
+const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, userRole, onAnnouncementPost, session }) => {
   const settings = fullState.management.settings;
   const staffCount = fullState.management.staff.length;
   const [announcementText, setAnnouncementText] = useState('');
@@ -36,7 +36,6 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
   ];
 
   const quickActions = useMemo(() => {
-    // Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type
     if (userRole === 'school_admin') {
       return [
         { id: 'ASSESSMENT', label: 'Assess', desc: 'Logging System', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
@@ -45,7 +44,6 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
         { id: 'ADMIN', label: 'Identity', desc: 'School Settings', icon: '⚙️', accent: 'bg-amber-50 text-amber-600' },
       ];
     }
-    // Fix: Changed 'FACILITATOR' to lowercase 'facilitator' to match UserRole type
     if (userRole === 'facilitator') {
       return [
         { id: 'ASSESSMENT', label: 'Assess', desc: 'Activity Logs', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
@@ -78,11 +76,24 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
                  Role: {userRole} • Identity Node: {settings.institutionalId || 'PRIMARY'}
                </p>
             </div>
+            
+            {/* v9.5 Balance Display in Dashboard */}
+            {session && (
+              <div className="flex gap-4 shrink-0">
+                 <div className="bg-white/10 p-5 rounded-3xl border border-white/10 text-center backdrop-blur-md min-w-[120px]">
+                    <span className="block text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Merit Pool</span>
+                    <span className="text-2xl font-black text-white">{session.meritBalance || 0}</span>
+                 </div>
+                 <div className="bg-indigo-600/50 p-5 rounded-3xl border border-indigo-400/30 text-center backdrop-blur-md min-w-[120px]">
+                    <span className="block text-[8px] font-black text-indigo-200 uppercase tracking-widest mb-1">Vault GHS</span>
+                    <span className="text-2xl font-black text-white">₵{session.monetaryBalance?.toFixed(2) || '0.00'}</span>
+                 </div>
+              </div>
+            )}
          </div>
       </div>
 
       {/* Admin Announcement Creator */}
-      {/* Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type */}
       {userRole === 'school_admin' && (
         <div className="bg-amber-50 rounded-[3rem] p-10 border-2 border-amber-200 shadow-xl animate-in slide-in-from-bottom-2">
            <h4 className="text-2xl font-black text-amber-950 uppercase tracking-tight mb-6 flex items-center gap-4">
@@ -106,7 +117,6 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, us
       )}
 
       {/* Active Announcement (Visible to Facilitators/Pupils) */}
-      {/* Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type */}
       {userRole !== 'school_admin' && settings.announcement?.active && (
         <div className="bg-indigo-600 rounded-[3.5rem] p-12 text-white shadow-2xl animate-pulse flex flex-col md:flex-row items-center gap-8 border-4 border-white/10">
            <div className="text-5xl">📡</div>

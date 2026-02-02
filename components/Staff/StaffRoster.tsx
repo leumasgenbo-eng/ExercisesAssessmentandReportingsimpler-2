@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { ManagementState, Staff, FacilitatorRoleType, EmploymentType, FacilitatorSubjectMapping, SchoolGroup, AppState, AssessmentData, ExerciseMetadata } from '../../types';
-import { SCHOOL_HIERARCHY, SUBJECTS_BY_GROUP, WEEK_COUNT } from '../../constants';
+import { ManagementState, Staff, FacilitatorRoleType, EmploymentType, FacilitatorSubjectMapping, SchoolGroup } from '../../types';
+import { SCHOOL_HIERARCHY, SUBJECTS_BY_GROUP } from '../../constants';
+import { SupabaseSync } from '../../lib/supabase';
 
 interface Props {
   data: ManagementState;
@@ -11,154 +12,108 @@ interface Props {
   setActiveMappingType: (t: FacilitatorRoleType) => void;
   activeEmployment: EmploymentType;
   setActiveEmployment: (t: EmploymentType) => void;
-  fullAppState?: AppState;
 }
 
 const StaffRoster: React.FC<Props> = ({ 
   data, onUpdate, selectedStaffId, onSelectStaff, 
-  activeMappingType, setActiveMappingType, activeEmployment, setActiveEmployment,
-  fullAppState
+  activeMappingType, setActiveMappingType, activeEmployment, setActiveEmployment
 }) => {
   const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [targetLevel, setTargetLevel] = useState<SchoolGroup>('LOWER_BASIC');
   const [isMatrixOpen, setIsMatrixOpen] = useState(false);
   const [targetClass, setTargetClass] = useState('Basic 1A');
   const [tempAssignments, setTempAssignments] = useState<Record<string, boolean>>({});
-  const [isRosterFocus, setIsRosterFocus] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(false);
   
-  const staffFileInputRef = useRef<HTMLInputElement>(null);
+  const staffImportRef = useRef<HTMLInputElement>(null);
 
-  // Subject Summary State
-  const [isSubjectSummaryOpen, setIsSubjectSummaryOpen] = useState(false);
-  const [summaryClass, setSummaryClass] = useState('Basic 1A');
-  const [summarySubject, setSummarySubject] = useState('');
-  const [summaryWeek, setSummaryWeek] = useState('ALL'); 
-  const [summaryMonth, setSummaryMonth] = useState('MONTH 1');
-  const [summaryTerm, setSummaryTerm] = useState('1ST TERM');
-
-  // Live Grid Filters
-  const [gridClass, setGridClass] = useState('');
-  const [gridSubject, setGridSubject] = useState('');
-
-  const generateCode = (staffId: string) => {
+  const generateCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    const updatedStaff = data.staff.map(s => s.id === staffId ? { ...s, uniqueCode: code } : s);
-    onUpdate({ ...data, staff: updatedStaff });
+    for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    return code;
   };
 
-  const addStaff = (e: React.FormEvent) => {
+  const enrolFacilitator = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName) return;
-    /**
-     * Fixed: Added missing 'category' property for new staff member
-     */
-    const newS: Staff = { 
-      id: `s-${Date.now()}`, 
+    if (!newName || !newEmail) return;
+    
+    setIsProvisioning(true);
+    const uniqueCode = generateCode();
+    
+    const newStaff: Staff = { 
+      id: newEmail.toLowerCase(), 
       name: newName.toUpperCase(), 
-      role: 'Facilitator', 
-      category: 'BASIC_SUBJECT_LEVEL',
-      email: '',
-      uniqueCode: '' 
+      role: 'facilitator', 
+      category: targetLevel === 'DAYCARE' ? 'DAYCARE_FACILITATOR' : targetLevel === 'KINDERGARTEN' ? 'KG_FACILITATOR' : targetLevel === 'JHS' ? 'JHS_SPECIALIST' : 'BASIC_SUBJECT_LEVEL',
+      email: newEmail.toLowerCase(),
+      uniqueCode 
     };
-    onUpdate({ ...data, staff: [...data.staff, newS] });
-    setNewName('');
+
+    try {
+      await SupabaseSync.registerSchool({
+        name: newStaff.name,
+        nodeId: data.settings.institutionalId,
+        email: newStaff.email,
+        hubId: data.settings.hubId,
+        originGate: 'FACILITATOR'
+      });
+      
+      onUpdate({ ...data, staff: [...data.staff, newStaff] });
+      setNewName('');
+      setNewEmail('');
+      alert(`Enrolment Verified. PIN: ${uniqueCode}`);
+    } catch (err) {
+      alert("Handshake Error: Check cloud link.");
+    } finally {
+      setIsProvisioning(false);
+    }
   };
 
-  const handleBulkDownload = (format: 'CSV' | 'JSON') => {
-    if (data.staff.length === 0) {
-      alert("Registry is currently empty.");
-      return;
-    }
-
-    let content = '';
-    let fileName = `Facilitator_Roster_${new Date().toISOString().split('T')[0]}`;
-    let mimeType = '';
-
-    if (format === 'CSV') {
-      const headers = ['ID', 'Name', 'Role', 'Email', 'UniqueCode'];
-      const rows = data.staff.map(s => [s.id, s.name, s.role, s.email, s.uniqueCode || '']);
-      content = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
-      fileName += '.csv';
-      mimeType = 'text/csv';
-    } else {
-      content = JSON.stringify(data.staff, null, 2);
-      fileName += '.json';
-      mimeType = 'application/json';
-    }
-
-    const blob = new Blob([content], { type: mimeType });
+  const downloadStaffList = () => {
+    const headers = ['Name', 'Email', 'Category', 'Unique Code'];
+    const rows = data.staff.map(s => [s.name, s.email, s.category, s.uniqueCode]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = fileName;
+    link.download = `Facilitator_Registry_${data.settings.name}.csv`;
     link.click();
-    URL.revokeObjectURL(url);
   };
 
-  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStaffImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const text = event.target?.result as string;
-      if (!text) return;
-
-      let newStaff: Staff[] = [];
-      try {
-        if (file.name.endsWith('.json')) {
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed)) {
-            newStaff = parsed.map((s: any, idx: number) => ({
-              id: s.id || `s-up-${Date.now()}-${idx}`,
-              name: (s.name || '').toUpperCase(),
-              role: s.role || 'Facilitator',
-              /**
-               * Added default category during JSON bulk ingestion
-               */
-              category: s.category || 'BASIC_SUBJECT_LEVEL',
-              email: s.email || '',
-              uniqueCode: s.uniqueCode || ''
-            }));
-          }
-        } else {
-          const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-          const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
-          
-          newStaff = lines.slice(1).map((line, idx) => {
-            const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(p => p.replace(/^"|"$/g, '').trim());
-            /**
-             * Added default category during CSV bulk ingestion
-             */
-            const s: any = { id: `s-up-${Date.now()}-${idx}`, role: 'Facilitator', category: 'BASIC_SUBJECT_LEVEL' };
-            
-            headers.forEach((h, hIdx) => {
-              if (h === 'name') s.name = parts[hIdx]?.toUpperCase();
-              if (h === 'role') s.role = parts[hIdx] || 'Facilitator';
-              if (h === 'category') s.category = parts[hIdx] || 'BASIC_SUBJECT_LEVEL';
-              if (h === 'email') s.email = parts[hIdx] || '';
-              if (h === 'uniquecode' || h === 'code') s.uniqueCode = parts[hIdx] || '';
-              if (h === 'id' && parts[hIdx]) s.id = parts[hIdx];
-            });
-            return s as Staff;
-          }).filter(s => s.name);
-        }
-
-        if (newStaff.length > 0) {
-          const existingNames = new Set(data.staff.map(s => s.name));
-          const trulyNew = newStaff.filter(s => !existingNames.has(s.name));
-          onUpdate({ ...data, staff: [...data.staff, ...trulyNew] });
-          alert(`Successfully ingested ${trulyNew.length} new facilitator records.`);
-        }
-      } catch (err) {
-        alert("CRITICAL ERROR: Failed to parse the roster file. Ensure standard formatting.");
+      const lines = text.split('\n').slice(1);
+      const newStaffList = [...data.staff];
+      
+      for (const line of lines) {
+        const [name, email, category] = line.split(',').map(s => s?.trim());
+        if (!name || !email) continue;
+        const code = generateCode();
+        const staffObj: Staff = { id: email.toLowerCase(), name: name.toUpperCase(), email: email.toLowerCase(), category: (category || 'BASIC_SUBJECT_LEVEL') as any, role: 'facilitator', uniqueCode: code };
+        
+        // Sync to cloud individually to ensure identity persistence
+        try {
+          await SupabaseSync.registerSchool({ name: staffObj.name, nodeId: data.settings.institutionalId, email: staffObj.email, hubId: data.settings.hubId, originGate: 'FACILITATOR' });
+          newStaffList.push(staffObj);
+        } catch (e) { console.error(`Failed to sync ${name}`); }
       }
+      onUpdate({ ...data, staff: newStaffList });
+      alert("Staff roster batch synchronized.");
     };
     reader.readAsText(file);
-    if (staffFileInputRef.current) staffFileInputRef.current.value = '';
+  };
+
+  const forwardCredentials = (staff: Staff) => {
+    const message = `UNITED BAYLOR ACADEMY\nNODE ACCESS KEYCARD\n\nName: ${staff.name}\nHub Node: ${data.settings.institutionalId}\nSecret PIN: ${staff.uniqueCode}\n\nProtocol: Enter these details at the Identity Gateway.`;
+    navigator.clipboard.writeText(message);
+    alert("Keycard Payload Copied.");
   };
 
   const getGroupForClass = (cls: string): SchoolGroup => {
@@ -191,141 +146,137 @@ const StaffRoster: React.FC<Props> = ({
     setTempAssignments({});
   };
 
-  const removeMapping = (id: string) => {
-    if (!confirm("Remove this duty assignment?")) return;
-    onUpdate({ ...data, mappings: data.mappings.filter(m => m.id !== id) });
-  };
-
-  const filteredMappings = useMemo(() => {
-    return data.mappings.filter(m => {
-      const subName = data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId;
-      if (gridClass && m.className !== gridClass) return false;
-      if (gridSubject && subName !== gridSubject) return false;
-      if (selectedStaffId && m.staffId !== selectedStaffId) return false;
-      return true;
-    });
-  }, [data.mappings, gridClass, gridSubject, selectedStaffId, data.subjects]);
-
   return (
-    <div className="flex flex-col lg:flex-row gap-8 items-start transition-all duration-700">
-      {!isRosterFocus && (
-        <div className="lg:w-[350px] w-full bg-white rounded-[2.5rem] p-8 shadow-xl border border-slate-200 flex flex-col shrink-0 animate-in slide-in-from-left-4 duration-500">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-[0.3em]">Registry</h3>
-            <div className="flex gap-2">
-               <button onClick={() => handleBulkDownload('CSV')} className="p-2 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-lg transition-all" title="Export Roster (CSV)">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-               </button>
-               <button onClick={() => staffFileInputRef.current?.click()} className="p-2 bg-slate-50 text-slate-400 hover:text-sky-600 rounded-lg transition-all" title="Bulk Import Roster">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-               </button>
-               {/* Fix: Removed invalid 'hide' property from input element */}
-               <input type="file" ref={staffFileInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json" />
+    <div className="flex flex-col lg:flex-row gap-10 items-start animate-in">
+      <div className="lg:w-[450px] w-full bg-white rounded-[3.5rem] p-10 shadow-2xl border-4 border-slate-900 flex flex-col shrink-0">
+        <div className="flex justify-between items-center mb-8">
+            <h3 className="text-2xl font-black uppercase text-slate-950 tracking-tighter flex items-center gap-3">
+            <span className="w-10 h-10 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-lg">📥</span>
+            Registry
+            </h3>
+            <div className="flex gap-1.5">
+                <button onClick={downloadStaffList} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:text-slate-900 transition-all shadow-sm" title="Download Staff CSV">⬇️</button>
+                <button onClick={() => staffImportRef.current?.click()} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:text-indigo-600 transition-all shadow-sm" title="Upload Staff CSV">⬆️</button>
+                <input type="file" ref={staffImportRef} className="hidden" accept=".csv" onChange={handleStaffImport} />
             </div>
+        </div>
+        
+        <form onSubmit={enrolFacilitator} className="space-y-6 mb-10">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Full Legal Name</label>
+            <input className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.8rem] font-black text-slate-950 text-xs outline-none uppercase focus:border-indigo-600 transition-all shadow-inner" placeholder="FACILITATOR NAME..." value={newName} onChange={(e) => setNewName(e.target.value)} required />
           </div>
-          
-          <form onSubmit={addStaff} className="space-y-3 mb-8">
-            <input className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black text-slate-900 text-xs outline-none uppercase" placeholder="Full Name..." value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <button className="w-full bg-sky-950 text-white font-black uppercase text-[10px] py-4 rounded-2xl shadow-lg hover:bg-black transition-all">Add Facilitator</button>
-          </form>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Verified Email</label>
+            <input type="email" className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.8rem] font-black text-slate-950 text-xs outline-none focus:border-indigo-600 transition-all shadow-inner" placeholder="STAFF@BAYLOR.EDU" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Academic Posting</label>
+            <select className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.8rem] font-black text-slate-950 text-xs outline-none uppercase shadow-inner" value={targetLevel} onChange={(e) => setTargetLevel(e.target.value as SchoolGroup)}>
+              {Object.keys(SCHOOL_HIERARCHY).map(k => <option key={k} value={k}>{k}</option>)}
+            </select>
+          </div>
+          <button disabled={isProvisioning} className="w-full bg-slate-950 text-white font-black uppercase text-[11px] tracking-[0.2em] py-6 rounded-[2rem] shadow-2xl hover:bg-black transition-all">
+            {isProvisioning ? 'SYNCHRONIZING...' : 'Add & Sync to Cloud +'}
+          </button>
+        </form>
 
-          <div className="space-y-2 overflow-y-auto max-h-[500px] scrollbar-hide">
-            {data.staff.map(s => (
-              <div key={s.id} onClick={() => onSelectStaff(s.id)} className={`p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-4 ${selectedStaffId === s.id ? 'bg-sky-50 border-sky-600 shadow-md' : 'bg-white border-transparent'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs ${selectedStaffId === s.id ? 'bg-sky-600 text-white' : 'bg-slate-900 text-white'}`}>{s.name.charAt(0)}</div>
-                <div className="truncate flex-1">
-                  <div className="font-black uppercase text-[11px] text-slate-900">{s.name}</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="text-[9px] font-bold uppercase text-slate-400">{s.role}</div>
-                    {s.uniqueCode && <span className="bg-emerald-500/10 text-emerald-600 text-[7px] px-1.5 py-0.5 rounded font-black tracking-widest uppercase">CODE: {s.uniqueCode}</span>}
-                  </div>
+        <div className="space-y-3 overflow-y-auto max-h-[400px] scrollbar-hide pr-3">
+          <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4">Live Staff Node</div>
+          {data.staff.map(s => (
+            <div key={s.id} onClick={() => onSelectStaff(s.id)} className={`p-5 rounded-[2rem] border-4 transition-all cursor-pointer flex items-center justify-between group ${selectedStaffId === s.id ? 'bg-indigo-50 border-indigo-600 shadow-xl' : 'bg-white border-transparent hover:bg-slate-50'}`}>
+              <div className="flex items-center gap-4 truncate">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${selectedStaffId === s.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>{s.name.charAt(0)}</div>
+                <div className="truncate">
+                  <div className="font-black uppercase text-[12px] text-slate-950 truncate tracking-tight">{s.name}</div>
+                  <div className="text-[9px] font-bold uppercase text-indigo-400 tracking-widest">{s.category.replace('_', ' ')}</div>
                 </div>
               </div>
-            ))}
-          </div>
+              {selectedStaffId === s.id && (
+                <button onClick={(e) => { e.stopPropagation(); forwardCredentials(s); }} className="p-3 bg-white text-indigo-600 rounded-xl shadow-lg border-2 border-indigo-100 transition-all" title="Forward Access Card">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                </button>
+              )}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
-      <div className={`flex-1 space-y-8 w-full transition-all duration-700`}>
-        <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-slate-200 shadow-xl min-h-[500px]">
-          {selectedStaffId && (
-            <div className="mb-10 p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 animate-in fade-in duration-500">
-               <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div>
-                    <h4 className="text-xl font-black text-slate-900 uppercase">Credential Management</h4>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Authorized Access Protocol for {data.staff.find(s => s.id === selectedStaffId)?.name}</p>
+      <div className="flex-1 space-y-10 w-full">
+        <div className="bg-white rounded-[4.5rem] p-12 md:p-16 shadow-2xl border-4 border-slate-50 min-h-[700px]">
+          {selectedStaffId ? (
+            <div className="animate-in fade-in">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10 mb-14 border-b-4 border-slate-50 pb-12">
+                 <div>
+                   <h3 className="text-4xl font-black text-slate-950 uppercase tracking-tighter">Duty Assignment Grid</h3>
+                   <p className="text-[12px] font-bold text-indigo-500 uppercase tracking-[0.2em] mt-2">Allocating Academic Scope: {data.staff.find(s => s.id === selectedStaffId)?.name}</p>
+                 </div>
+                 <div className="flex flex-wrap gap-4">
+                    <div className="bg-slate-950 p-2 rounded-[2rem] flex gap-1 shadow-2xl">
+                        <button onClick={() => setActiveMappingType('CLASS_BASED')} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMappingType === 'CLASS_BASED' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-500'}`}>Class Based</button>
+                        <button onClick={() => setActiveMappingType('SUBJECT_BASED')} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMappingType === 'SUBJECT_BASED' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-500'}`}>Subject Based</button>
+                    </div>
+                    <button onClick={() => setIsMatrixOpen(true)} className="bg-indigo-600 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl hover:bg-indigo-700 transition-all active:scale-95">Map Domains +</button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                {data.mappings.filter(m => m.staffId === selectedStaffId).map(m => (
+                  <div key={m.id} className="bg-slate-50 p-8 rounded-[3.5rem] border-4 border-transparent hover:border-indigo-100 hover:bg-white transition-all shadow-sm flex items-center justify-between group">
+                    <div className="truncate pr-6">
+                      <div className="text-[13px] font-black text-slate-950 uppercase truncate leading-none mb-2">{data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId}</div>
+                      <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{m.className}</div>
+                    </div>
+                    <button onClick={() => onUpdate({ ...data, mappings: data.mappings.filter(map => map.id !== m.id) })} className="w-12 h-12 rounded-2xl bg-white text-slate-200 hover:text-rose-500 transition-all flex items-center justify-center shadow-sm">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
-                  <div className="flex items-center gap-4">
-                     <div className="bg-white px-8 py-3 rounded-2xl border-2 border-slate-200 flex flex-col items-center shadow-sm">
-                        <span className="text-[8px] font-black text-slate-300 uppercase mb-1">Active Login Code</span>
-                        <span className="text-2xl font-black text-indigo-600 tracking-[0.3em]">{data.staff.find(s => s.id === selectedStaffId)?.uniqueCode || '------'}</span>
-                     </div>
-                     <button 
-                       onClick={() => generateCode(selectedStaffId)} 
-                       className="bg-sky-950 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] shadow-xl hover:bg-black transition-all"
-                     >
-                        {data.staff.find(s => s.id === selectedStaffId)?.uniqueCode ? 'Refresh Code' : 'Generate Code'}
-                     </button>
-                  </div>
-               </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="py-56 text-center opacity-10 flex flex-col items-center">
+              <div className="text-[12rem] mb-12">👨‍🏫</div>
+              <h4 className="text-3xl font-black uppercase tracking-[0.5em]">Identity Handshake Pending</h4>
+              <p className="text-[12px] font-bold uppercase mt-4 tracking-[0.3em]">Establish curriculum scope for active staff.</p>
             </div>
           )}
-
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 border-b border-slate-50 pb-8">
-             <div className="flex items-center gap-4">
-               <h3 className="text-2xl font-black text-slate-900 uppercase">Mapping Matrix</h3>
-               <button onClick={() => setIsMatrixOpen(true)} disabled={!selectedStaffId} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${selectedStaffId ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 text-slate-300'}`}>Assign Responsibilities</button>
-             </div>
-             <div className="flex gap-3">
-                <select className="bg-slate-50 border-none px-4 py-2 rounded-xl font-black text-slate-900 uppercase text-[10px] outline-none" value={gridClass} onChange={(e) => setGridClass(e.target.value)}><option value="">- CLASS -</option>{Object.values(SCHOOL_HIERARCHY).flatMap(g => g.classes).map(c => <option key={c} value={c}>{c}</option>)}</select>
-                <select className="bg-slate-50 border-none px-4 py-2 rounded-xl font-black text-slate-900 uppercase text-[10px] outline-none" value={gridSubject} onChange={(e) => setGridSubject(e.target.value)}><option value="">- SUBJECT -</option>{Array.from(new Set(data.subjects.map(s => s.name))).map(s => <option key={s} value={s}>{s}</option>)}</select>
-             </div>
-          </div>
-
-          <div className={`grid grid-cols-1 md:grid-cols-2 ${isRosterFocus ? 'xl:grid-cols-4' : 'xl:grid-cols-3'} gap-4 transition-all duration-700`}>
-            {filteredMappings.map(m => {
-              const staff = data.staff.find(s => s.id === m.staffId);
-              const subName = data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId;
-              return (
-                <div key={m.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-5 hover:bg-white hover:border-sky-500 hover:shadow-2xl transition-all group animate-in">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-lg font-black shrink-0">{staff?.name.charAt(0)}</div>
-                  <div className="flex-1 truncate">
-                    <div className="font-black text-slate-900 uppercase text-xs">{staff?.name}</div>
-                    <div className="text-[10px] font-bold text-sky-600 uppercase truncate">{subName}</div>
-                    <div className="text-[9px] font-black text-slate-400 uppercase mt-1">{m.className}</div>
-                    {staff?.uniqueCode && <div className="text-[7px] font-black text-indigo-400 uppercase mt-1">Code: {staff.uniqueCode}</div>}
-                  </div>
-                  <button onClick={() => removeMapping(m.id)} className="p-3 text-slate-200 hover:text-rose-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
 
       {isMatrixOpen && (
-        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white rounded-[3rem] p-10 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-4 border-slate-900">
-              <div className="flex justify-between items-start mb-8 shrink-0">
-                 <div><h4 className="text-3xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-2">Matrix Builder</h4><p className="text-[11px] font-black text-sky-600 uppercase tracking-widest">Assigning to: {data.staff.find(s => s.id === selectedStaffId)?.name}</p></div>
-                 <button onClick={() => setIsMatrixOpen(false)} className="text-slate-300 hover:text-rose-500 p-3 bg-slate-50 rounded-full transition-all"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg></button>
-              </div>
-              <div className="flex-1 overflow-y-auto pr-4 space-y-10 scrollbar-hide">
-                 <div className="space-y-4">
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block ml-1">Select Target Scope</label>
-                    <select className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-3xl font-black text-slate-900 uppercase text-sm outline-none focus:border-sky-600 transition-all shadow-inner" value={targetClass} onChange={(e) => setTargetClass(e.target.value)}>{Object.values(SCHOOL_HIERARCHY).flatMap(g => g.classes).map(c => <option key={c} value={c}>{c}</option>)}</select>
+        <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-2xl animate-in fade-in">
+           <div className="bg-white rounded-[4.5rem] p-14 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-[0_100px_200px_rgba(0,0,0,0.4)] border-4 border-slate-900">
+              <div className="flex justify-between items-start mb-12 border-b-4 border-slate-50 pb-10 shrink-0">
+                 <div>
+                    <h4 className="text-4xl font-black text-slate-950 uppercase tracking-tighter leading-none mb-3">Academic Matrix Assignment</h4>
+                    <p className="text-[12px] font-black text-indigo-600 uppercase tracking-[0.3em]">Allocating Domains to Node: {data.staff.find(s => s.id === selectedStaffId)?.name}</p>
                  </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                 <button onClick={() => setIsMatrixOpen(false)} className="text-slate-300 hover:text-rose-500 p-4 bg-slate-50 rounded-full transition-all hover:rotate-90">
+                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
+                 </button>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-6 space-y-12 scrollbar-hide">
+                 <div className="space-y-5">
+                    <label className="text-[12px] font-black text-slate-400 uppercase tracking-widest block ml-2">Academic Target Class</label>
+                    <select className="w-full bg-slate-50 border-4 border-slate-100 p-6 rounded-[2.5rem] font-black text-slate-950 uppercase text-lg outline-none focus:border-indigo-600 transition-all shadow-inner" value={targetClass} onChange={(e) => setTargetClass(e.target.value)}>
+                      {Object.values(SCHOOL_HIERARCHY).flatMap(g => g.classes).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {currentSubjects.map(sub => (
-                      <label key={sub} className={`flex items-center gap-4 p-6 rounded-[2rem] border-2 transition-all cursor-pointer ${tempAssignments[sub] ? 'bg-sky-600 border-sky-600 text-white shadow-xl' : 'bg-slate-50 border-transparent text-slate-600 hover:bg-slate-100'}`}>
+                      <label key={sub} className={`flex items-center gap-6 p-8 rounded-[3rem] border-4 transition-all cursor-pointer ${tempAssignments[sub] ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xl' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-slate-100'}`}>
                         <input type="checkbox" className="hidden" checked={!!tempAssignments[sub]} onChange={() => setTempAssignments(prev => ({...prev, [sub]: !prev[sub]}))} />
-                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${tempAssignments[sub] ? 'bg-white border-white' : 'border-slate-300'}`}>{tempAssignments[sub] && <svg className="w-4 h-4 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
-                        <span className="text-[11px] font-black uppercase leading-tight">{sub}</span>
+                        <div className={`w-8 h-8 rounded-xl border-4 flex items-center justify-center transition-all shrink-0 ${tempAssignments[sub] ? 'bg-white border-white' : 'border-slate-300'}`}>{tempAssignments[sub] && <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
+                        <span className="text-[13px] font-black uppercase leading-tight tracking-tight">{sub}</span>
                       </label>
                     ))}
                  </div>
               </div>
-              <div className="mt-10 pt-8 border-t border-slate-100 flex gap-4 shrink-0"><button onClick={() => setIsMatrixOpen(false)} className="flex-1 py-5 border-2 border-slate-100 text-slate-400 rounded-[2rem] font-black uppercase text-xs tracking-widest hover:bg-slate-50 transition-all">Discard</button><button onClick={handleApplyGrid} className="flex-[2] bg-sky-950 text-white py-5 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Apply Grid</button></div>
+              <div className="mt-14 pt-10 border-t-4 border-slate-50 flex gap-6 shrink-0">
+                 <button onClick={() => setIsMatrixOpen(false)} className="flex-1 py-7 border-4 border-slate-100 text-slate-400 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.4em] hover:bg-slate-50 transition-all">Discard</button>
+                 <button onClick={handleApplyGrid} className="flex-[2] bg-slate-950 text-white py-7 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.4em] shadow-[0_30px_60px_rgba(0,0,0,0.3)] hover:bg-black transition-all active:scale-95">Confirm Allocation</button>
+              </div>
            </div>
         </div>
       )}

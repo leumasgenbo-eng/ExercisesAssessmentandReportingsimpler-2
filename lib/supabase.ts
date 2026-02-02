@@ -10,15 +10,13 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * v8.2 Optimized Protocol: Verify Identity using Case-Insensitive Handshake
-   * Using 'ilike' ensures that mismatches in capitalization between UI and DB do not break the link.
+   * v9.5 Handshake Protocol: Verify Identity and fetch financial balances.
    */
   async verifyIdentity(fullName: string, nodeId: string) {
     const cleanName = fullName.trim();
     const cleanNode = nodeId.trim();
     
-    // Constructing URL with 'ilike' for case-insensitive matching
-    const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*`;
+    const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*,merit_balance,monetary_balance`;
     const res = await fetch(`${SUPABASE_URL}/uba_identities?${query}`, { headers });
     
     if (!res.ok) {
@@ -32,7 +30,7 @@ export const SupabaseSync = {
   },
 
   async fetchStaff(hubId: string) {
-    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*`, { headers });
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*,merit_balance,monetary_balance`, { headers });
     if (!res.ok) throw new Error('Cloud Identity Fetch Failed');
     return res.json();
   },
@@ -55,7 +53,7 @@ export const SupabaseSync = {
   },
 
   /**
-   * Pushes the full app state to the cloud shard with deduplication handling
+   * Pushes the full app state to the cloud shard
    */
   async pushGlobalState(nodeId: string, hubId: string, fullState: any) {
     const payload = {
@@ -79,12 +77,13 @@ export const SupabaseSync = {
   },
 
   /**
-   * v8.2 Provisioning: Registers new school with explicit Identity Hub entry
+   * v9.5 Provisioning: Registers new school with explicit Identity Hub entry
    */
   async registerSchool(schoolData: { 
     name: string, 
     nodeId: string, 
     email: string, 
+    slogan?: string,
     hubId: string,
     originGate: string 
   }) {
@@ -95,7 +94,9 @@ export const SupabaseSync = {
       node_id: schoolData.nodeId.trim().toUpperCase(),
       hub_id: schoolData.hubId,
       role: 'school_admin',
-      teaching_category: 'ADMINISTRATOR'
+      teaching_category: 'ADMINISTRATOR',
+      merit_balance: 0,
+      monetary_balance: 0
     };
 
     const idRes = await fetch(`${SUPABASE_URL}/uba_identities`, {
@@ -123,6 +124,7 @@ export const SupabaseSync = {
                 name: schoolData.name.toUpperCase(),
                 institutionalId: schoolData.nodeId.toUpperCase(),
                 hubId: schoolData.hubId,
+                slogan: schoolData.slogan || "Knowledge is Power",
                 currentTerm: "1ST TERM",
                 currentYear: "2024/2025",
                 activeMonth: "MONTH 1",
@@ -135,7 +137,8 @@ export const SupabaseSync = {
               name: schoolData.name.toUpperCase(), 
               role: 'school_admin', 
               category: 'ADMINISTRATOR', 
-              email: schoolData.email 
+              email: schoolData.email,
+              uniqueCode: Math.floor(100000 + Math.random() * 900000).toString()
             }],
             subjects: [],
             mappings: [],

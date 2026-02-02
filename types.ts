@@ -1,25 +1,17 @@
 /**
- * SSMAP CORE SCHEMA v7.5.0
+ * SSMAP CORE SCHEMA v9.5.0
  * United Baylor Academy - Daily Activity Pulse System
- * 
- * Note: This system tracks DAILY CLASSROOM ACTIVITIES.
- * High-stakes Mock/Test data resides in the companion Assessment Node.
  */
-
-// --- ENUMERATIONS & LITERALS ---
 
 export type AssessmentType = 'CLASS' | 'HOME' | 'PROJECT' | 'CRITERION';
 
 export type SchoolGroup = 'DAYCARE' | 'KINDERGARTEN' | 'LOWER_BASIC' | 'UPPER_BASIC' | 'JHS';
 
-/**
- * Facilitator Category distinguishes staff roles within the same node
- */
 export type FacilitatorCategory = 
   | 'DAYCARE_FACILITATOR' 
   | 'KG_FACILITATOR' 
-  | 'BASIC_SUBJECT_LEVEL' // Basic 1 - 6
-  | 'JHS_SPECIALIST'      // Basic 7 - 9
+  | 'BASIC_SUBJECT_LEVEL' 
+  | 'JHS_SPECIALIST'      
   | 'ADMINISTRATOR';
 
 export type FacilitatorRoleType = 'CLASS_BASED' | 'SUBJECT_BASED';
@@ -30,8 +22,6 @@ export type UserRole = 'super_admin' | 'school_admin' | 'facilitator' | 'pupil';
 
 export type ManagementSubView = 'COMPLIANCE' | 'PLANNING' | 'SUBJECT_MAPPING';
 
-// --- IDENTITY & SESSION SCHEMA ---
-
 export interface UserSession {
   role: UserRole;
   nodeName: string;
@@ -41,27 +31,26 @@ export interface UserSession {
   facilitatorName?: string;
   facilitatorCategory?: FacilitatorCategory;
   pupilId?: string;
+  meritBalance?: number;    // v9.5 Financials
+  monetaryBalance?: number; // v9.5 Financials
 }
 
-/**
- * Staff Identity with Teaching Category to prevent role overlap on the same node
- */
 export interface Staff {
-  id: string;               // Global UID
+  id: string;               
   name: string;
   role: string;
   category: FacilitatorCategory; 
   email: string;
-  uniqueCode: string;       // Local Node Auth Token
+  uniqueCode: string;       
+  meritBalance?: number;
+  monetaryBalance?: number;
 }
 
-// --- PUPIL SCHEMA (Cross-App Integrity) ---
-
 export interface MasterPupilEntry {
-  studentId: string;        // SHARED ID for Basic 9 across apps
+  studentId: string;        
   name: string;
   gender: 'M' | 'F' | 'Other';
-  isJhsLevel: boolean;      // If true, uses shared studentId protocol
+  isJhsLevel: boolean;      
 }
 
 export interface InterventionRecord {
@@ -76,8 +65,8 @@ export interface InterventionRecord {
 }
 
 export interface Pupil {
-  id: string;               // Local activity record ID
-  studentId: string;        // Shared identifier (Basic 9 cross-app)
+  id: string;               
+  studentId: string;        
   name: string;
   gender?: 'M' | 'F' | 'Other';
   bookOpen?: boolean;       
@@ -87,8 +76,6 @@ export interface Pupil {
   scoreReasons?: Record<number, string>;
   interventionReason?: string;
 }
-
-// --- CORE SYSTEM STATE ---
 
 export interface ExerciseMetadata {
   id: number;
