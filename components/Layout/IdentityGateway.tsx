@@ -22,13 +22,14 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   isGeneratingToken 
 }) => {
   const [gate, setGate] = useState<GateType>('FACILITATOR');
-  const [view, setView] = useState<'GATES' | 'FORM' | 'REGISTER' | 'HANDSHAKE'>('GATES');
+  const [view, setView] = useState<'GATES' | 'FORM' | 'REGISTER' | 'HANDSHAKE' | 'SUCCESS'>('GATES');
   const [accessKey, setAccessKey] = useState('');
   const [syncStatus, setSyncStatus] = useState('');
   const [error, setError] = useState('');
 
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
+  const [lastCredentials, setLastCredentials] = useState<{ nodeId: string, pin: string, name: string } | null>(null);
 
   const initiateHandshake = async (session: UserSession) => {
     setView('HANDSHAKE');
@@ -72,6 +73,45 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     }
   };
 
+  const handleRegisterNode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setView('HANDSHAKE');
+    setSyncStatus('Provisioning Node Assets...');
+
+    const prefix = regName.replace(/[^a-zA-Z]/g, '').substring(0, 4).toUpperCase();
+    const nodeId = `${prefix}-UB-${Math.floor(1000 + Math.random() * 9000)}`;
+    const pin = `PIN-${Math.floor(100000 + Math.random() * 899999)}`;
+
+    try {
+      await SupabaseSync.registerSchool({
+        name: regName,
+        nodeId,
+        email: regEmail,
+        pin,
+        hubId: 'SMA-HQ',
+        originGate: gate
+      });
+
+      setLastCredentials({ nodeId, pin, name: regName });
+      setView('SUCCESS');
+    } catch (err) {
+      setError('Registration Failed. Email might be in use or connection lost.');
+      setView('REGISTER');
+    }
+  };
+
+  const downloadKeycard = () => {
+    if (!lastCredentials) return;
+    const content = `UNITED BAYLOR ACADEMY: ACCESS KEYCARD\n\nSchool: ${lastCredentials.name}\nNode ID: ${lastCredentials.nodeId}\nAdmin PIN: ${lastCredentials.pin}\n\nProtocol: Store this keycard securely. Do not share with unauthorized staff.`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `KEYCARD_${lastCredentials.nodeId}.txt`;
+    link.click();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -84,7 +124,6 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     }
 
     if (gate === 'PUPIL') {
-        // Pupil login usually uses studentId as the PIN in this implementation
         initiateHandshake({ 
           role: 'pupil', 
           nodeName: management.settings.name, 
@@ -95,7 +134,6 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
         return;
     }
 
-    // Protocol: Cloud PIN Handshake for Facilitators and Admins
     setSyncStatus('Verifying Credentials...');
     setView('HANDSHAKE');
     try {
@@ -107,7 +145,6 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
             return;
         }
 
-        // Validate Role and Context
         if (gate === 'ADMIN' && identity.role !== 'school_admin' && identity.role !== 'super_admin') {
             setError('Unauthorized: Administrative clearance required.');
             setView('FORM');
@@ -116,8 +153,9 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
 
         initiateHandshake({
             role: identity.role,
-            nodeName: identity.node_id, // Identity shard should contain node metadata
+            nodeName: identity.node_id,
             nodeId: identity.node_id,
+            // Fix: Changed 'hub_id' to 'hubId' to match UserSession interface
             hubId: identity.hub_id,
             facilitatorId: identity.email,
             facilitatorName: identity.full_name,
@@ -210,8 +248,8 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                
                <button type="submit" className="w-full bg-slate-950 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:scale-[1.02] transition-all">Authorize Cloud Handshake</button>
             </form>
-          ) : view === 'REGISTER' && (
-            <div className="space-y-10 animate-in slide-in-from-bottom-4">
+          ) : view === 'REGISTER' ? (
+            <form onSubmit={handleRegisterNode} className="space-y-10 animate-in slide-in-from-bottom-4">
                 <div className="flex items-center gap-6">
                   <button type="button" onClick={() => setView('GATES')} className="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center text-xl hover:bg-slate-100 transition-colors">←</button>
                   <div>
@@ -221,11 +259,47 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                </div>
 
                <div className="space-y-6">
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black uppercase text-sm outline-none" placeholder="Full School Name" value={regName} onChange={(e) => setRegName(e.target.value)} />
-                  <input type="email" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-sm outline-none" placeholder="Administrative Email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} />
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Official School Name</label>
+                    <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black uppercase text-sm outline-none focus:border-indigo-500" placeholder="e.g. United Baylor Academy" value={regName} onChange={(e) => setRegName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Admin Email for Discovery</label>
+                    <input type="email" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-sm outline-none focus:border-indigo-500" placeholder="admin@school.edu" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
+                  </div>
                </div>
 
-               <button onClick={() => setView('GATES')} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl">Request Core Token</button>
+               {error && <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-center"><p className="text-[10px] font-black text-rose-600 uppercase">{error}</p></div>}
+
+               <button type="submit" className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">Generate Institutional Core</button>
+            </form>
+          ) : view === 'SUCCESS' && lastCredentials && (
+            <div className="text-center space-y-12 animate-in zoom-in-95">
+               <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-xl">✓</div>
+               <div>
+                  <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-4">Provisioning Complete</h3>
+                  <p className="text-slate-500 text-xs font-bold uppercase tracking-widest max-w-sm mx-auto leading-relaxed">The institutional node has been activated on the matrix. Please download your credentials immediately.</p>
+               </div>
+
+               <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white text-left space-y-6 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 text-4xl">🔐</div>
+                  <div>
+                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Access Node ID</span>
+                    <div className="text-2xl font-black tracking-widest">{lastCredentials.nodeId}</div>
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Security PIN</span>
+                    <div className="text-2xl font-black tracking-widest">{lastCredentials.pin}</div>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 gap-4">
+                  <button onClick={downloadKeycard} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-xl flex items-center justify-center gap-3">
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                     Download Keycard
+                  </button>
+                  <button onClick={() => setView('GATES')} className="w-full text-slate-400 font-black uppercase text-[10px] tracking-[0.4em] hover:text-slate-600 transition-colors py-4">Return to Identity Hub</button>
+               </div>
             </div>
           )}
        </div>

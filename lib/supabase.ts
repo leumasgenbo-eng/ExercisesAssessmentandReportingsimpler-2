@@ -65,5 +65,79 @@ export const SupabaseSync = {
     
     if (!res.ok) throw new Error('Cloud Activity State Push Failed');
     return res.json();
+  },
+
+  /**
+   * v8.0 Provisioning: Registers a new school node and its first admin identity
+   */
+  async registerSchool(schoolData: { 
+    name: string, 
+    nodeId: string, 
+    email: string, 
+    pin: string, 
+    hubId: string,
+    originGate: string 
+  }) {
+    // 1. Provision the primary Admin Identity
+    const identityPayload = {
+      email: schoolData.email,
+      full_name: `${schoolData.name} ADMIN`,
+      node_id: schoolData.nodeId,
+      hub_id: schoolData.hubId,
+      role: 'school_admin',
+      teaching_category: 'ADMINISTRATOR',
+      unique_code: schoolData.pin
+    };
+
+    const idRes = await fetch(`${SUPABASE_URL}/uba_identities`, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify(identityPayload)
+    });
+
+    if (!idRes.ok) throw new Error('Identity Creation Failed');
+
+    // 2. Initialize the Persistence Shard for the Node
+    const persistenceId = `daily_activity_${schoolData.hubId}_${schoolData.nodeId}`;
+    const initialPayload = {
+        classWork: {},
+        homeWork: {},
+        projectWork: {},
+        criterionWork: {},
+        bookCountRecords: {},
+        management: {
+            settings: {
+                name: schoolData.name,
+                institutionalId: schoolData.nodeId,
+                hubId: schoolData.hubId,
+                currentTerm: "1ST TERM",
+                currentYear: "2024/2025",
+                activeMonth: "MONTH 1",
+                complianceThreshold: 0.85,
+                poorPerformanceThreshold: 10,
+                poorPerformanceFrequency: 3
+            },
+            staff: [{ id: schoolData.email, name: `${schoolData.name} ADMIN`, role: 'school_admin', category: 'ADMINISTRATOR', email: schoolData.email, uniqueCode: schoolData.pin }],
+            subjects: [],
+            mappings: [],
+            weeklyMappings: [],
+            masterPupils: {},
+            messages: []
+        }
+    };
+
+    const pRes = await fetch(`${SUPABASE_URL}/uba_persistence`, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+          id: persistenceId,
+          hub_id: schoolData.hubId,
+          payload: initialPayload
+      })
+    });
+
+    if (!pRes.ok) throw new Error('Persistence Shard Initialization Failed');
+    
+    return { success: true };
   }
 };
