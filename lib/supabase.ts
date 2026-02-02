@@ -10,13 +10,15 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * v9.5 Handshake Protocol: Verify Identity and fetch financial balances.
+   * v9.5 Handshake Protocol: Verify Identity and fetch available node data.
+   * Uses select=* to prevent hard errors if financial columns are not yet provisioned in the specific node.
    */
   async verifyIdentity(fullName: string, nodeId: string) {
     const cleanName = fullName.trim();
     const cleanNode = nodeId.trim();
     
-    const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*,merit_balance,monetary_balance`;
+    // Fixed: Using select=* to avoid "column does not exist" errors if schema is partially out of sync
+    const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*`;
     const res = await fetch(`${SUPABASE_URL}/uba_identities?${query}`, { headers });
     
     if (!res.ok) {
@@ -30,7 +32,8 @@ export const SupabaseSync = {
   },
 
   async fetchStaff(hubId: string) {
-    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*,merit_balance,monetary_balance`, { headers });
+    // Fixed: Simplified selection string
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*`, { headers });
     if (!res.ok) throw new Error('Cloud Identity Fetch Failed');
     return res.json();
   },
