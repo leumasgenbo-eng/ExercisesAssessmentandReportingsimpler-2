@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AssessmentType, AssessmentData, SchoolGroup, ManagementState, Pupil } from '../../types';
 import { EXERCISES_PER_TYPE, SUBJECTS_BY_GROUP } from '../../constants';
 
@@ -39,6 +39,18 @@ const AssessmentSheet: React.FC<Props> = (props) => {
   const [viewMode, setViewMode] = useState<'TABLE' | 'INTERVIEW'>('TABLE');
 
   const next = (step: WizardStep) => setWizardStep(step);
+
+  /**
+   * Sync Focus Mode with CAPI State
+   * When in SCORING step and INTERVIEW mode, we trigger global isolation
+   */
+  useEffect(() => {
+    if (wizardStep === 'SCORING' && viewMode === 'INTERVIEW') {
+      props.setIsFocusMode(true);
+    } else {
+      props.setIsFocusMode(false);
+    }
+  }, [wizardStep, viewMode]);
 
   const renderContent = () => {
     switch (wizardStep) {
@@ -104,7 +116,10 @@ const AssessmentSheet: React.FC<Props> = (props) => {
             {...props}
             viewMode={viewMode}
             setViewMode={setViewMode}
-            onExit={() => next('RIGOR')}
+            onExit={() => {
+               props.setIsFocusMode(false);
+               next('RIGOR');
+            }}
           />
         );
       default:
@@ -126,7 +141,7 @@ const AssessmentSheet: React.FC<Props> = (props) => {
             </div>
           </div>
         )}
-        <div className="px-2 md:px-4">
+        <div className={`${props.isFocusMode ? 'px-0' : 'px-2 md:px-4'}`}>
           {renderContent()}
         </div>
       </div>

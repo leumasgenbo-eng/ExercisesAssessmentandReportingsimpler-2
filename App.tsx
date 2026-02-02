@@ -106,15 +106,11 @@ const App: React.FC = () => {
    */
   const handleAuthenticate = (userSession: UserSession, hydratedState?: AppState) => {
     if (hydratedState) {
-      // Direct application of downloaded cloud state
       setState(hydratedState);
-      
-      // Sync global temporal contexts from the hydrated shard
       const settings = hydratedState.management.settings;
       setActiveYear(settings.currentYear);
       setActiveTerm(settings.currentTerm);
       setActiveMonth(settings.activeMonth);
-      
       console.log(`Node Hydration Successful for ${userSession.nodeName}`);
     }
     setSession(userSession);
@@ -169,30 +165,32 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col font-sans bg-slate-50 transition-colors duration-700">
-      <Topbar 
-        activeView={activeView} 
-        onViewChange={(v) => navigateToView(v as ViewType)} 
-        onBack={goBack}
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-        activeSchoolGroup={activeSchoolGroup} 
-        onSchoolGroupChange={setActiveSchoolGroup} 
-        activeClass={activeClass} 
-        onClassChange={setActiveClass} 
-        activeYear={activeYear}
-        onYearChange={setActiveYear}
-        activeTerm={activeTerm}
-        onTermChange={setActiveTerm}
-        activeMonth={activeMonth}
-        onMonthChange={setActiveMonth}
-        activeWeek={activeWeek} 
-        onWeekChange={setActiveWeek} 
-        onPrint={() => window.print()}
-        onLogout={() => setSession(null)}
-        userRole={session.role}
-        isFocusMode={isFocusMode}
-      />
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-700 ${isFocusMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      {!isFocusMode && (
+        <Topbar 
+          activeView={activeView} 
+          onViewChange={(v) => navigateToView(v as ViewType)} 
+          onBack={goBack}
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+          activeSchoolGroup={activeSchoolGroup} 
+          onSchoolGroupChange={setActiveSchoolGroup} 
+          activeClass={activeClass} 
+          onClassChange={setActiveClass} 
+          activeYear={activeYear}
+          onYearChange={setActiveYear}
+          activeTerm={activeTerm}
+          onTermChange={setActiveTerm}
+          activeMonth={activeMonth}
+          onMonthChange={setActiveMonth}
+          activeWeek={activeWeek} 
+          onWeekChange={setActiveWeek} 
+          onPrint={() => window.print()}
+          onLogout={() => setSession(null)}
+          userRole={session.role}
+          isFocusMode={isFocusMode}
+        />
+      )}
 
       <main className={`flex-1 transition-all duration-700 ${isFocusMode ? 'pt-0' : 'pt-6 md:pt-10 px-4 md:px-12 pb-24'}`}>
         <div className={`mx-auto transition-all duration-700 ${isFocusMode ? 'max-w-full' : 'max-w-[1500px]'}`}>
@@ -210,13 +208,14 @@ const App: React.FC = () => {
 
           {activeView === 'ASSESSMENT' && (
             <div className="space-y-6">
-              {/* EXACT HEADER REQUIREMENT: 1: Class Assignment/ACTIVITIES SCHOOL: UNITED BAYLOR A. CLS: ASSESSMENT SHEET */}
-              <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
-                 <div className="flex items-center gap-4">
-                    <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
-                    <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: UNITED BAYLOR A. • CLS: ASSESSMENT SHEET</h2>
-                 </div>
-              </div>
+              {!isFocusMode && (
+                <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
+                   <div className="flex items-center gap-4">
+                      <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: UNITED BAYLOR A. • CLS: ASSESSMENT SHEET</h2>
+                   </div>
+                </div>
+              )}
               <AssessmentSheet 
                 type={activeTab} data={activeAssessmentData} 
                 onUpdate={(newData) => setState(prev => ({...prev, [activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork']: {...prev[activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork'], [dataKey]: newData}}))} 
@@ -294,15 +293,17 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v7.9.0 • Secured Session</span>
-        </div>
-        <div className="flex items-center gap-6">
-          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
-        </div>
-      </footer>
+      {!isFocusMode && (
+        <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v8.2.1 • Secured Session</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
+          </div>
+        </footer>
+      )}
     </div>
   );
 };
