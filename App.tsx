@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AssessmentType, AppState, AssessmentData, SchoolGroup, ManagementState, Pupil } from './types';
+import { AssessmentType, AppState, AssessmentData, SchoolGroup, ManagementState, Pupil, UserSession, Message, RegisteredSchool } from './types';
 import { INITIAL_MANAGEMENT_DATA, createInitialAssessmentData } from './constants';
 import AssessmentSheet from './components/Assessments/AssessmentSheet';
 import Topbar from './components/Layout/Topbar';
@@ -8,12 +8,16 @@ import PlanningPanel from './components/Planning/PlanningPanel';
 import AdminPanel from './components/Admin/AdminPanel';
 import PupilPortal from './components/Pupils/PupilPortal';
 import HomeDashboard from './components/Dashboard/HomeDashboard';
-import { SupabaseSync } from './lib/supabase';
+import IdentityGateway from './components/Layout/IdentityGateway';
+import SuperAdminPortal from './components/Admin/SuperAdminPortal';
 
-type ViewType = 'HOME' | 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS';
+type ViewType = 'HOME' | 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS' | 'MESSAGES' | 'SUPER_ADMIN';
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<UserSession | null>(null);
   const [activeView, setActiveView] = useState<ViewType>('HOME');
+  const [viewHistory, setViewHistory] = useState<ViewType[]>(['HOME']);
+  
   const [activeTab, setActiveTab] = useState<AssessmentType>('CLASS');
   const [activeSchoolGroup, setActiveSchoolGroup] = useState<SchoolGroup>('LOWER_BASIC');
   const [activeClass, setActiveClass] = useState<string>('Basic 1A');
@@ -27,22 +31,18 @@ const App: React.FC = () => {
   const [selectedExercise, setSelectedExercise] = useState<number[] | 'ALL'>('ALL');
   const [isFocusMode, setIsFocusMode] = useState(false);
   
-  // CONNECTIVITY & SYNC STATE
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [pendingSyncKeys, setPendingSyncKeys] = useState<string[]>(() => {
-    const saved = localStorage.getItem('uba_sync_queue');
-    return saved ? JSON.parse(saved) : [];
-  });
-
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('uba_assessment_v3');
+    const saved = localStorage.getItem('uba_assessment_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         return {
           ...parsed,
-          bookCountRecords: parsed.bookCountRecords || {}
+          management: {
+            ...INITIAL_MANAGEMENT_DATA,
+            ...parsed.management,
+            messages: parsed.management.messages || []
+          }
         };
       } catch (e) {}
     }
@@ -52,125 +52,54 @@ const App: React.FC = () => {
       projectWork: {}, 
       criterionWork: {}, 
       bookCountRecords: {},
-      management: { ...INITIAL_MANAGEMENT_DATA } 
+      management: { ...INITIAL_MANAGEMENT_DATA, messages: [] } 
     };
   });
 
-  // Sync state and pending keys to localStorage
   useEffect(() => {
-    localStorage.setItem('uba_assessment_v3', JSON.stringify(state));
+    localStorage.setItem('uba_assessment_v5', JSON.stringify(state));
   }, [state]);
 
-  useEffect(() => {
-    localStorage.setItem('uba_sync_queue', JSON.stringify(pendingSyncKeys));
-  }, [pendingSyncKeys]);
-
-  // Listener for browser connectivity
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      triggerSyncHandshake();
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    if (navigator.onLine && pendingSyncKeys.length > 0) {
-      triggerSyncHandshake();
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+  const navigateToView = useCallback((view: ViewType) => {
+    setViewHistory(prev => {
+      if (prev[prev.length - 1] === view) return prev;
+      return [...prev, view];
+    });
+    setActiveView(view);
   }, []);
 
-  const triggerSyncHandshake = useCallback(() => {
-    if (pendingSyncKeys.length === 0) return;
-    setIsSyncing(true);
-    setTimeout(() => {
-      console.log(`📡 SYNC SUCCESS: Secured ${pendingSyncKeys.length} items to Cloud Intelligence.`);
-      setPendingSyncKeys([]);
-      setIsSyncing(false);
-    }, 2500);
-  }, [pendingSyncKeys]);
-
-  useEffect(() => {
-    setActiveYear(state.management.settings.currentYear);
-    setActiveTerm(state.management.settings.currentTerm);
-    setActiveMonth(state.management.settings.activeMonth || "MONTH 1");
-  }, [state.management.settings]);
-
-  const onExerciseChange = useCallback((ex: number[] | 'ALL') => {
-    setSelectedExercise(ex);
-  }, []);
-
-  useEffect(() => {
-    setSelectedExercise('ALL');
-  }, [activeTab]);
-
-  const availableIndicators = useMemo(() => {
-    const activePlans = state.management.weeklyMappings.filter(wm => 
-      wm.className === activeClass && 
-      wm.subject === activeSubject && 
-      wm.week === activeWeek
-    );
-    
-    const indicators: string[] = [];
-    activePlans.forEach(plan => {
-      if (plan.indicators) {
-        const parts = plan.indicators.split(/[,\.;\n]+/).map(i => i.trim()).filter(i => i);
-        indicators.push(...parts);
+  const goBack = useCallback(() => {
+    setViewHistory(prev => {
+      if (prev.length <= 1) {
+        setActiveView('HOME');
+        return ['HOME'];
       }
+      const newHistory = [...prev];
+      newHistory.pop();
+      const lastView = newHistory[newHistory.length - 1];
+      setActiveView(lastView);
+      return newHistory;
     });
-    
-    if (indicators.length === 0) {
-      state.management.curriculum.forEach(strand => 
-        strand.substrands.forEach(ss => indicators.push(...ss.indicators))
-      );
-    }
-
-    return Array.from(new Set(indicators)).sort();
-  }, [state.management.weeklyMappings, state.management.curriculum, activeClass, activeSubject, activeWeek]);
-
-  const updateAssessmentData = useCallback((type: AssessmentType, key: string, newData: AssessmentData) => {
-    setState(prev => {
-      const stateKey = type === 'CLASS' ? 'classWork' : type === 'HOME' ? 'homeWork' : type === 'PROJECT' ? 'projectWork' : 'criterionWork';
-      return { ...prev, [stateKey]: { ...prev[stateKey], [key]: newData } };
-    });
-    setPendingSyncKeys(prev => prev.includes(key) ? prev : [...prev, key]);
-  }, []);
-
-  const updateBookCountRecord = useCallback((key: string, data: { count: number; date: string; enrollment?: number }) => {
-    setState(prev => ({
-      ...prev,
-      bookCountRecords: { ...prev.bookCountRecords, [key]: data }
-    }));
-    setPendingSyncKeys(prev => prev.includes(key) ? prev : [...prev, key]);
   }, []);
 
   const updateManagementData = useCallback((newData: ManagementState) => {
     setState(prev => ({ ...prev, management: newData }));
-    setPendingSyncKeys(prev => prev.includes('MANAGEMENT_CONFIG') ? prev : [...prev, 'MANAGEMENT_CONFIG']);
   }, []);
 
-  const resetSystem = useCallback(() => {
-    if (confirm("ERASE ALL SYSTEM DATA?")) {
-      setState({ 
-        classWork: {}, 
-        homeWork: {}, 
-        projectWork: {}, 
-        criterionWork: {}, 
-        bookCountRecords: {},
-        management: { ...INITIAL_MANAGEMENT_DATA } 
-      });
-      setPendingSyncKeys([]);
-      setActiveView('HOME');
-    }
-  }, []);
-
-  const restoreSystem = useCallback((newState: AppState) => { setState(newState); }, []);
+  const sendMessage = (text: string, to: 'ADMIN' | 'FACILITATORS') => {
+    const newMessage: Message = {
+      id: `msg-${Date.now()}`,
+      from: session?.facilitatorName || session?.role || 'User',
+      to,
+      text,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    updateManagementData({
+      ...state.management,
+      messages: [newMessage, ...state.management.messages]
+    });
+  };
 
   const dataKey = `${activeYear}|${activeTerm}|${activeMonth}|${activeWeek}|${activeClass}|${activeSubject}`;
   const activeAssessmentData = useMemo(() => {
@@ -203,126 +132,165 @@ const App: React.FC = () => {
     return existing;
   }, [activeTab, dataKey, state, activeClass, activeSubject, activeWeek, activeYear, activeTerm, activeMonth]);
 
-  const getTabBgColor = () => {
-    if (isFocusMode) return 'bg-slate-950';
-    if (activeView === 'HOME') return 'bg-slate-50';
-    if (activeView !== 'ASSESSMENT') return 'bg-slate-50';
-    switch (activeTab) {
-      case 'HOME': return 'bg-emerald-50/50';
-      case 'PROJECT': return 'bg-amber-50/50';
-      case 'CRITERION': return 'bg-rose-50/50';
-      default: return 'bg-slate-50';
-    }
-  };
+  if (!session) {
+    return (
+      <IdentityGateway 
+        management={state.management}
+        onAuthenticate={setSession}
+        onSuperAdminTrigger={() => setSession({ role: 'SUPER_ADMIN', nodeName: 'MASTER', nodeId: 'GLOBAL' })}
+        onRegisterSchool={(school) => updateManagementData({ ...state.management, superAdminRegistry: [...(state.management.superAdminRegistry || []), school] })}
+        isSuperAdminAuth={false}
+        isGeneratingToken={false}
+      />
+    );
+  }
+
+  // Redirect Pupil role if they try to access non-authorized views
+  if (session.role === 'PUPIL' && activeView !== 'PUPILS') {
+    setActiveView('PUPILS');
+  }
 
   return (
-    <div className={`min-h-screen relative flex flex-col font-sans transition-colors duration-700 ${getTabBgColor()}`}>
-      {!isOnline && (
-        <div className="no-print sticky top-0 z-[100] bg-amber-500 text-white py-2 px-4 text-center text-[9px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 animate-pulse shadow-md">
-           <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
-           OFFLINE MODE: Changes cached locally • {pendingSyncKeys.length} items awaiting sync
-        </div>
-      )}
-      {isSyncing && (
-        <div className="no-print sticky top-0 z-[100] bg-indigo-600 text-white py-2 px-4 text-center text-[9px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 shadow-md">
-           <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-           SYNCING: Communicating with remote intelligence node...
-        </div>
-      )}
+    <div className="min-h-screen flex flex-col font-sans bg-slate-50 transition-colors duration-700">
+      <Topbar 
+        activeView={activeView} 
+        onViewChange={(v) => navigateToView(v as ViewType)} 
+        onBack={goBack}
+        activeTab={activeTab} 
+        onTabChange={setActiveTab} 
+        activeSchoolGroup={activeSchoolGroup} 
+        onSchoolGroupChange={setActiveSchoolGroup} 
+        activeClass={activeClass} 
+        onClassChange={setActiveClass} 
+        activeYear={activeYear}
+        onYearChange={setActiveYear}
+        activeTerm={activeTerm}
+        onTermChange={setActiveTerm}
+        activeMonth={activeMonth}
+        onMonthChange={setActiveMonth}
+        activeWeek={activeWeek} 
+        onWeekChange={setActiveWeek} 
+        onPrint={() => window.print()}
+        onLogout={() => setSession(null)}
+        userRole={session.role}
+        isFocusMode={isFocusMode}
+      />
 
-      <>
-        <Topbar 
-          activeView={activeView} 
-          onViewChange={(v) => setActiveView(v as ViewType)} 
-          activeTab={activeTab} 
-          onTabChange={setActiveTab} 
-          activeSchoolGroup={activeSchoolGroup} 
-          onSchoolGroupChange={setActiveSchoolGroup} 
-          activeClass={activeClass} 
-          onClassChange={setActiveClass} 
-          activeYear={activeYear}
-          onYearChange={setActiveYear}
-          activeTerm={activeTerm}
-          onTermChange={setActiveTerm}
-          activeMonth={activeMonth}
-          onMonthChange={setActiveMonth}
-          activeWeek={activeWeek} 
-          onWeekChange={setActiveWeek} 
-          onPrint={() => window.print()}
-          onLogout={() => {}}
-          isFocusMode={isFocusMode}
-          isAdminUnlocked={true} 
-          isInstitutionalized={true}
-          userRole="SUPER_ADMIN"
-        />
-        <main className={`flex-1 relative z-10 transition-all duration-700 ${isFocusMode ? 'pt-0' : 'pt-6 md:pt-10 px-4 md:px-12'}`}>
-          <div className={`mx-auto transition-all duration-700 ${isFocusMode ? 'max-w-full' : 'max-w-[1500px]'}`}>
-            {activeView === 'HOME' && (
-              <HomeDashboard 
-                fullState={state} 
-                onNavigate={(view) => setActiveView(view as ViewType)} 
-              />
-            )}
-            {activeView === 'ASSESSMENT' && (
-              <div className="animate-in">
-                {!isFocusMode && (
-                  <div className="mb-4 no-print flex flex-col md:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-5 rounded-[2rem] shadow-sm">
-                    <div className="flex items-center gap-4">
-                      <span className={`text-white text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest ${
-                        activeTab === 'HOME' ? 'bg-emerald-600' : activeTab === 'PROJECT' ? 'bg-amber-500' : activeTab === 'CRITERION' ? 'bg-rose-600' : 'bg-sky-950'
-                      }`}>{activeTab} ENTRY</span>
-                      <h2 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight uppercase leading-none">{activeClass}</h2>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[9px] font-black border transition-colors ${isOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                        <span className={`w-1.5 h-1.5 ${isOnline ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full animate-pulse`}></span>
-                        {isOnline ? 'CLOUD SYNC ACTIVE' : 'OFFLINE STORAGE'}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div id={`assessment-sheet-${activeTab}`} className={`transition-all duration-700 ${isFocusMode ? '' : 'bg-white shadow-xl rounded-[2.5rem] border border-slate-200 overflow-hidden'}`}>
-                  <AssessmentSheet 
-                    type={activeTab} data={activeAssessmentData} 
-                    onUpdate={(newData) => { if (newData.subject !== activeSubject) setActiveSubject(newData.subject || ''); updateAssessmentData(activeTab, dataKey, newData); }} 
-                    selectedExercise={selectedExercise} onExerciseChange={onExerciseChange}
-                    availableIndicators={availableIndicators} activeSchoolGroup={activeSchoolGroup} managementData={state.management}
-                    isFocusMode={isFocusMode} setIsFocusMode={setIsFocusMode}
-                    onYearChange={setActiveYear} onTermChange={setActiveTerm} onMonthChange={setActiveMonth} onWeekChange={setActiveWeek}
-                    onTabChange={setActiveTab} onSchoolGroupChange={setActiveSchoolGroup} onClassChange={setActiveClass} onSubjectChange={setActiveSubject}
-                  />
-                </div>
+      <main className={`flex-1 transition-all duration-700 ${isFocusMode ? 'pt-0' : 'pt-6 md:pt-10 px-4 md:px-12 pb-24'}`}>
+        <div className={`mx-auto transition-all duration-700 ${isFocusMode ? 'max-w-full' : 'max-w-[1500px]'}`}>
+          {activeView === 'HOME' && (
+            <HomeDashboard 
+              fullState={state} 
+              onNavigate={(view) => navigateToView(view as ViewType)} 
+              userRole={session.role}
+              onAnnouncementPost={(text) => updateManagementData({
+                ...state.management,
+                settings: { ...state.management.settings, announcement: { id: Date.now().toString(), text, timestamp: new Date().toISOString(), active: true } }
+              })}
+            />
+          )}
+
+          {activeView === 'ASSESSMENT' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
+                 <div className="flex items-center gap-4">
+                    <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
+                    <h2 className="text-2xl font-black uppercase tracking-tighter">SCHOOL: {state.management.settings.name} • CLS: ASSESSMENT SHEET</h2>
+                 </div>
               </div>
-            )}
-            {activeView === 'FACILITATORS' && <FacilitatorPanel data={state.management} onUpdate={updateManagementData} fullAppState={state} />}
-            {activeView === 'PLANNING' && <PlanningPanel data={state.management} onUpdate={updateManagementData} fullAppState={state} />}
-            {activeView === 'ADMIN' && (
-              <AdminPanel 
-                data={state.management} fullState={state} onUpdateManagement={updateManagementData} 
-                onResetSystem={resetSystem} onRestoreSystem={restoreSystem} isSuperAdminAuthenticated={true}
-              />
-            )}
-            {activeView === 'PUPILS' && (
-              <PupilPortal 
-                fullState={state} onUpdateState={updateAssessmentData} onUpdateBookCounts={updateBookCountRecord}
+              <AssessmentSheet 
+                type={activeTab} data={activeAssessmentData} 
+                onUpdate={(newData) => setState(prev => ({...prev, [activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork']: {...prev[activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork'], [dataKey]: newData}}))} 
+                selectedExercise={selectedExercise} onExerciseChange={setSelectedExercise}
+                availableIndicators={[]} activeSchoolGroup={activeSchoolGroup} managementData={state.management}
                 isFocusMode={isFocusMode} setIsFocusMode={setIsFocusMode}
+                onYearChange={setActiveYear} onTermChange={setActiveTerm} onMonthChange={setActiveMonth} onWeekChange={setActiveWeek}
+                onTabChange={setActiveTab} onSchoolGroupChange={setActiveSchoolGroup} onClassChange={setActiveClass} onSubjectChange={setActiveSubject}
               />
-            )}
-          </div>
-        </main>
-        {!isFocusMode && (
-          <footer className="no-print mt-10 pt-6 pb-12 md:pb-8 border-t border-slate-200 bg-white">
-            <div className="max-w-7xl mx-auto px-6 text-center flex flex-col items-center gap-4">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shadow-md" title="System Active"></div>
-                  <p className="text-[9px] text-slate-500 font-black tracking-widest uppercase">Institutional Node Core v7.4.2 • {isOnline ? 'Online Sync' : 'Local Offline Storage'}</p>
-                </div>
+            </div>
+          )}
+
+          {activeView === 'PLANNING' && <PlanningPanel data={state.management} onUpdate={updateManagementData} fullAppState={state} />}
+          
+          {activeView === 'PUPILS' && (
+            <PupilPortal 
+              fullState={state} 
+              onUpdateState={(type, key, data) => setState(prev => ({...prev, [type === 'CLASS' ? 'classWork' : 'homeWork']: {...prev[type === 'CLASS' ? 'classWork' : 'homeWork'], [key]: data}}))}
+              isFocusMode={isFocusMode} 
+              setIsFocusMode={setIsFocusMode}
+              isIndividualOnly={session.role === 'PUPIL'}
+            />
+          )}
+
+          {activeView === 'ADMIN' && session.role === 'SCHOOL_ADMIN' && (
+            <AdminPanel 
+              data={state.management} 
+              fullState={state} 
+              onUpdateManagement={updateManagementData} 
+              onResetSystem={() => setState({ classWork: {}, homeWork: {}, projectWork: {}, criterionWork: {}, bookCountRecords: {}, management: INITIAL_MANAGEMENT_DATA })}
+              onRestoreSystem={setState}
+            />
+          )}
+
+          {activeView === 'SUPER_ADMIN' && session.role === 'SUPER_ADMIN' && (
+            <SuperAdminPortal state={state} onUpdateState={setState} onUpdateManagement={updateManagementData} />
+          )}
+
+          {activeView === 'MESSAGES' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-in">
+              <div className="bg-white rounded-[3rem] p-10 shadow-2xl border border-slate-200">
+                <h3 className="text-3xl font-black uppercase tracking-tight mb-8">
+                  {session.role === 'SCHOOL_ADMIN' ? 'Message Facilitators' : 'Message School Admin'}
+                </h3>
+                <textarea 
+                  className="w-full bg-slate-50 border-2 border-slate-100 p-8 rounded-[2.5rem] font-bold text-slate-900 outline-none focus:border-indigo-500 transition-all resize-none h-48 shadow-inner"
+                  placeholder="Draft your communication node here..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage((e.target as HTMLTextAreaElement).value, session.role === 'SCHOOL_ADMIN' ? 'FACILITATORS' : 'ADMIN');
+                      (e.target as HTMLTextAreaElement).value = '';
+                      alert("Message Dispatched Successfully.");
+                    }
+                  }}
+                />
+                <div className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Press Enter to Dispatch to {session.role === 'SCHOOL_ADMIN' ? 'All Staff' : 'Admin Hub'}</div>
+              </div>
+
+              <div className="space-y-4">
+                {state.management.messages
+                  .filter(m => (session.role === 'SCHOOL_ADMIN' && m.to === 'ADMIN') || (session.role === 'FACILITATOR' && m.to === 'FACILITATORS'))
+                  .map(msg => (
+                    <div key={msg.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-lg">
+                      <div className="flex justify-between items-start mb-3">
+                        <span className="text-[10px] font-black text-indigo-600 uppercase">Origin: {msg.from}</span>
+                        <span className="text-[9px] font-bold text-slate-300 uppercase">{new Date(msg.timestamp).toLocaleString()}</span>
+                      </div>
+                      <p className="text-base font-bold text-slate-700 leading-relaxed italic">"{msg.text}"</p>
+                    </div>
+                  ))}
               </div>
             </div>
-          </footer>
-        )}
-      </>
+          )}
+        </div>
+      </main>
+
+      <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v7.4.2 • Secured Session</span>
+        </div>
+        <div className="flex items-center gap-6">
+          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
+          {session.role !== 'SUPER_ADMIN' && (
+            <button 
+              onDoubleClick={() => navigateToView('SUPER_ADMIN')}
+              className="w-5 h-5 bg-transparent opacity-0 cursor-default"
+              title="System Debug Gateway"
+            ></button>
+          )}
+        </div>
+      </footer>
     </div>
   );
 };

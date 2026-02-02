@@ -1,4 +1,3 @@
-
 import { AssessmentData, ManagementState, SchoolGroup, AssessmentType } from './types';
 
 export const SCHOOL_NAME = "UNITED BAYLOR ACADEMY";
@@ -185,6 +184,9 @@ export const createInitialAssessmentData = (week: string, type: AssessmentType):
 export const INITIAL_MANAGEMENT_DATA: ManagementState = {
   settings: {
     name: "UNITED BAYLOR ACADEMY",
+    /**
+     * slogan is now allowed in types.ts
+     */
     slogan: "Knowledge is Power",
     address: "P.O. Box GP 123, Accra, Ghana",
     contact: "+233 20 000 0000",
@@ -196,12 +198,15 @@ export const INITIAL_MANAGEMENT_DATA: ManagementState = {
     currentTerm: "1ST TERM",
     currentYear: "2024/2025",
     activeMonth: "MONTH 1",
-    excludedDepartments: []
+    institutionalId: "UB-MASTER-001" // Default Access Key 1
   },
   staff: [
-    { id: 's1', name: 'John Doe', role: 'Teacher', email: 'john@baylor.edu' },
-    { id: 's2', name: 'Jane Smith', role: 'Head of Daycare', email: 'jane@baylor.edu' },
-    { id: 's3', name: 'Robert Wilson', role: 'HOD Science', email: 'robert@baylor.edu' }
+    /**
+     * Fixed: Added missing category property to staff members
+     */
+    { id: 's1', name: 'John Doe', role: 'Teacher', category: 'BASIC_SUBJECT_LEVEL', email: 'john@baylor.edu', uniqueCode: 'FAC-111' }, 
+    { id: 's2', name: 'Jane Smith', role: 'Head of Daycare', category: 'DAYCARE_FACILITATOR', email: 'jane@baylor.edu', uniqueCode: 'FAC-222' },
+    { id: 's3', name: 'Robert Wilson', role: 'HOD Science', category: 'JHS_SPECIALIST', email: 'robert@baylor.edu', uniqueCode: 'FAC-333' }
   ],
   subjects: Array.from(new Set(Object.values(SUBJECTS_BY_GROUP).flat())).map((name, i) => ({
     id: `sub${i + 1}`,
@@ -247,5 +252,6 @@ export const INITIAL_MANAGEMENT_DATA: ManagementState = {
     { id: 'l2', week: '4', staffId: 's2', mappingId: 'm2', exerciseCount: 0, timestamp: '2023-11-21', status: 'DEFAULTER', reason: 'Medical Leave' }
   ],
   masterPupils: {},
-  superAdminRegistry: []
+  superAdminRegistry: [],
+  messages: []
 };

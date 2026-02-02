@@ -1,19 +1,21 @@
-import React, { useMemo } from 'react';
-import { AppState, MasterPupilEntry } from '../../types';
+import React, { useMemo, useState } from 'react';
+import { AppState, MasterPupilEntry, UserRole } from '../../types';
 import { SCHOOL_NAME } from '../../constants';
 
 interface HomeDashboardProps {
   fullState: AppState;
-  onNavigate: (view: string) => void;
+  onNavigate: (view: any) => void;
+  userRole: UserRole;
+  onAnnouncementPost?: (text: string) => void;
 }
 
-const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate }) => {
+const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate, userRole, onAnnouncementPost }) => {
   const settings = fullState.management.settings;
   const staffCount = fullState.management.staff.length;
+  const [announcementText, setAnnouncementText] = useState('');
   
   const totalPupils = useMemo(() => {
     return Object.values(fullState.management.masterPupils || {}).reduce(
-      // Added explicit type 'number' to 'acc' to fix "Operator '+' cannot be applied to types 'unknown' and 'number'" error
       (acc: number, curr) => acc + (curr as MasterPupilEntry[]).length, 
       0
     );
@@ -26,139 +28,125 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ fullState, onNavigate }) 
   }, [fullState.classWork, fullState.homeWork, fullState.projectWork]);
 
   const stats = [
-    { label: 'Total Pupils', value: totalPupils, icon: '🎓', color: 'bg-blue-500' },
-    { label: 'Facilitators', value: staffCount, icon: '👨‍🏫', color: 'bg-indigo-500' },
-    { label: 'Active Logs', value: activeAssessmentsCount, icon: '📝', color: 'bg-emerald-500' },
-    { label: 'Compliance', value: `${(settings.complianceThreshold * 100).toFixed(0)}%`, icon: '⚖️', color: 'bg-amber-500' },
+    { label: 'Total Pupils', value: totalPupils, icon: '🎓', color: 'bg-blue-500 shadow-blue-200' },
+    { label: 'Facilitators', value: staffCount, icon: '👨‍🏫', color: 'bg-indigo-500 shadow-indigo-200' },
+    { label: 'Active Logs', value: activeAssessmentsCount, icon: '📝', color: 'bg-emerald-500 shadow-emerald-200' },
+    { label: 'Compliance', value: `${(settings.complianceThreshold * 100).toFixed(0)}%`, icon: '⚖️', color: 'bg-amber-500 shadow-amber-200' },
   ];
 
-  const quickActions = [
-    { id: 'ASSESSMENT', label: 'Assessments', desc: 'Log scores and activities', icon: '📝', color: 'border-blue-200 hover:bg-blue-50' },
-    { id: 'PUPILS', label: 'Pupil Portal', desc: 'Registry and interventions', icon: '🎓', color: 'border-indigo-200 hover:bg-indigo-50' },
-    { id: 'PLANNING', label: 'Planning', desc: 'Curriculum broadsheets', icon: '📅', color: 'border-emerald-200 hover:bg-emerald-50' },
-    { id: 'FACILITATORS', label: 'Staff Hub', desc: 'Duty mapping and rosters', icon: '👨‍🏫', color: 'border-amber-200 hover:bg-amber-50' },
-  ];
+  const quickActions = useMemo(() => {
+    if (userRole === 'SCHOOL_ADMIN') {
+      return [
+        { id: 'ASSESSMENT', label: 'Assess', desc: 'Logging System', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
+        { id: 'PLANNING', label: 'Plan', desc: 'Curriculum Roadmap', icon: '📅', accent: 'bg-indigo-50 text-indigo-600' },
+        { id: 'MESSAGES', label: 'Notify Hub', desc: 'Contact Staff', icon: '💬', accent: 'bg-emerald-50 text-emerald-600' },
+        { id: 'ADMIN', label: 'Identity', desc: 'School Settings', icon: '⚙️', accent: 'bg-amber-50 text-amber-600' },
+      ];
+    }
+    if (userRole === 'FACILITATOR') {
+      return [
+        { id: 'ASSESSMENT', label: 'Assess', desc: 'Activity Logs', icon: '📝', accent: 'bg-blue-50 text-blue-600' },
+        { id: 'PLANNING', label: 'Plan', desc: 'My Broadsheets', icon: '📅', accent: 'bg-indigo-50 text-indigo-600' },
+        { id: 'MESSAGES', label: 'Support Hub', desc: 'Contact Admin', icon: '💬', accent: 'bg-emerald-50 text-emerald-600' },
+        { id: 'PUPILS', label: 'Registry', desc: 'Pupil Data', icon: '🎓', accent: 'bg-amber-50 text-amber-600' },
+      ];
+    }
+    return [
+      { id: 'PUPILS', label: 'My Performance', desc: 'Academic Summary', icon: '📊', accent: 'bg-indigo-50 text-indigo-600' },
+    ];
+  }, [userRole]);
 
   return (
-    <div className="animate-in space-y-10 pb-20 max-w-6xl mx-auto px-4">
-      {/* Welcome Hero */}
-      <div className="bg-sky-950 rounded-[3rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-sky-400/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-8">
-             <div className="w-16 h-16 bg-white/10 rounded-[1.5rem] flex items-center justify-center text-3xl shadow-inner border border-white/5">🏛️</div>
-             <div>
-                <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-1">
-                  {settings.name || SCHOOL_NAME}
-                </h1>
-                <p className="text-sky-300 font-bold uppercase tracking-[0.4em] text-[10px] md:text-xs opacity-70">
-                  {settings.slogan || "Knowledge is Power"}
-                </p>
-             </div>
-          </div>
-          
-          <div className="max-w-2xl">
-             <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight mb-4">Institutional Command Center</h2>
-             <p className="text-sky-100/60 text-xs md:text-sm font-medium leading-relaxed uppercase tracking-widest">
-               Centralized node for managing academic rigor, facilitator accountability, and learner progression.
-             </p>
-          </div>
-
-          <div className="mt-12 flex flex-wrap gap-4">
-             <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl flex items-center gap-3">
-                <span className="text-[10px] font-black text-sky-400 uppercase">Active Year</span>
-                <span className="font-black text-white">{settings.currentYear}</span>
-             </div>
-             <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl flex items-center gap-3">
-                <span className="text-[10px] font-black text-sky-400 uppercase">Active Term</span>
-                <span className="font-black text-white">{settings.currentTerm}</span>
-             </div>
-          </div>
-        </div>
+    <div className="animate-in space-y-12 pb-24 max-w-7xl mx-auto px-4">
+      {/* Required Header Context */}
+      <div className="bg-slate-900 p-8 rounded-[3rem] text-white flex justify-between items-center shadow-2xl relative overflow-hidden group">
+         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] group-hover:scale-110 transition-transform duration-1000"></div>
+         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 w-full">
+            <div className="w-20 h-20 bg-white/10 rounded-[2rem] flex items-center justify-center text-4xl shadow-inner backdrop-blur-md">🏛️</div>
+            <div className="text-center md:text-left flex-1">
+               <div className="flex flex-col md:flex-row items-center gap-3 mb-2">
+                 <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
+                 <p className="text-[10px] md:text-sm font-black text-indigo-400 uppercase tracking-widest">SCHOOL: {settings.name || SCHOOL_NAME} • CLS: ASSESSMENT SHEET</p>
+               </div>
+               <h1 className="text-3xl md:text-5xl font-black uppercase tracking-tighter leading-none mb-1">
+                 Node Control Center
+               </h1>
+               <p className="text-sky-100/40 text-[10px] font-black uppercase tracking-[0.4em]">
+                 Role: {userRole} • Identity Node: {settings.institutionalId || 'PRIMARY'}
+               </p>
+            </div>
+         </div>
       </div>
+
+      {/* Admin Announcement Creator */}
+      {userRole === 'SCHOOL_ADMIN' && (
+        <div className="bg-amber-50 rounded-[3rem] p-10 border-2 border-amber-200 shadow-xl animate-in slide-in-from-bottom-2">
+           <h4 className="text-2xl font-black text-amber-950 uppercase tracking-tight mb-6 flex items-center gap-4">
+              <span className="w-12 h-12 rounded-2xl bg-amber-200 flex items-center justify-center text-2xl shadow-sm">📢</span>
+              Institutional Announcement Broadcast
+           </h4>
+           <div className="flex flex-col md:flex-row gap-4">
+              <input 
+                type="text" 
+                className="flex-1 bg-white border-2 border-amber-100 p-6 rounded-[2rem] font-bold text-slate-800 outline-none focus:border-amber-500 transition-all shadow-inner"
+                placeholder="Broadcast a critical message to all facilitators in this node..."
+                value={announcementText}
+                onChange={(e) => setAnnouncementText(e.target.value)}
+              />
+              <button 
+                onClick={() => { if(announcementText) { onAnnouncementPost?.(announcementText); setAnnouncementText(''); alert('Broadcast Dispatched.'); } }}
+                className="bg-amber-600 text-white px-12 py-6 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-2xl hover:bg-amber-700 active:scale-95 transition-all"
+              >Dispatch Mode</button>
+           </div>
+        </div>
+      )}
+
+      {/* Active Announcement (Visible to Facilitators/Pupils) */}
+      {userRole !== 'SCHOOL_ADMIN' && settings.announcement?.active && (
+        <div className="bg-indigo-600 rounded-[3.5rem] p-12 text-white shadow-2xl animate-pulse flex flex-col md:flex-row items-center gap-8 border-4 border-white/10">
+           <div className="text-5xl">📡</div>
+           <div>
+              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-200 block mb-2">Internal Node Broadcast</span>
+              <p className="text-2xl md:text-3xl font-black uppercase tracking-tight italic leading-snug">
+                "{settings.announcement.text}"
+              </p>
+              <div className="mt-4 text-[9px] font-black opacity-60 uppercase tracking-widest">Administrative Timestamp: {new Date(settings.announcement.timestamp).toLocaleTimeString()}</div>
+           </div>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((s, idx) => (
-          <div key={idx} className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl flex flex-col items-center text-center group hover:scale-[1.02] transition-all">
-             <div className={`w-14 h-14 ${s.color} text-white rounded-2xl flex items-center justify-center text-2xl mb-4 shadow-lg`}>
+          <div key={idx} className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-xl flex flex-col items-center text-center group hover:scale-[1.05] transition-all duration-500">
+             <div className={`w-16 h-16 ${s.color} text-white rounded-2xl flex items-center justify-center text-3xl mb-6 shadow-xl group-hover:rotate-12 transition-transform`}>
                {s.icon}
              </div>
-             <span className="text-3xl font-black text-slate-900 mb-1">{s.value}</span>
-             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{s.label}</span>
+             <span className="text-4xl font-black text-slate-900 mb-2">{s.value}</span>
+             <span className="text-[11px] font-black uppercase text-slate-400 tracking-[0.3em]">{s.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Main Sections Navigation */}
-      <div className="space-y-6">
-         <h3 className="text-xs font-black uppercase text-slate-400 tracking-[0.5em] ml-2">Quick Navigation Hub</h3>
+      {/* Quick Navigation Hub */}
+      <div className="space-y-8">
+         <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-[0.6em] ml-6">Quick Navigation Hub</h3>
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {quickActions.map((action) => (
               <button 
                 key={action.id}
                 onClick={() => onNavigate(action.id)}
-                className={`p-8 rounded-[3rem] bg-white border-2 ${action.color} text-left transition-all shadow-lg flex flex-col gap-4 group`}
+                className="p-10 rounded-[4rem] bg-white border-2 border-slate-50 hover:border-indigo-600 text-left transition-all duration-500 shadow-2xl flex flex-col gap-6 group hover:-translate-y-3"
               >
-                <div className="text-4xl group-hover:scale-110 transition-transform duration-300">{action.icon}</div>
+                <div className={`w-16 h-16 ${action.accent} rounded-[1.8rem] flex items-center justify-center text-3xl shadow-inner transition-colors duration-500`}>
+                  {action.icon}
+                </div>
                 <div>
-                   <h4 className="font-black text-slate-900 uppercase text-lg leading-none mb-2">{action.label}</h4>
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">{action.desc}</p>
+                  <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2 group-hover:text-indigo-600 transition-colors">{action.label}</h4>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed tracking-wider">{action.desc}</p>
                 </div>
               </button>
             ))}
-         </div>
-      </div>
-
-      {/* Activity Pulse / Institutional Node Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-         <div className="lg:col-span-8 bg-white rounded-[3.5rem] p-10 border border-slate-200 shadow-xl overflow-hidden relative">
-            <h4 className="text-xl font-black text-slate-900 uppercase mb-8 flex items-center gap-3">
-               <span className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center text-xl">🗺️</span>
-               Institutional Roadmap
-            </h4>
-            <div className="space-y-6">
-               <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                  <h5 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4">Core Objectives</h5>
-                  <ul className="space-y-3">
-                     {[
-                       'Digitize all assessment logs for centralized reporting.',
-                       'Monitor facilitator curriculum coverage weekly.',
-                       'Track learner interventions and remedial outcomes.',
-                       'Maintain institutional data integrity via Cloud Sync.'
-                     ].map((item, idx) => (
-                       <li key={idx} className="flex items-center gap-4 text-xs font-bold text-slate-600 uppercase tracking-tight">
-                         <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                         {item}
-                       </li>
-                     ))}
-                  </ul>
-               </div>
-            </div>
-         </div>
-
-         <div className="lg:col-span-4 bg-indigo-600 rounded-[3.5rem] p-10 text-white shadow-2xl flex flex-col justify-between group overflow-hidden">
-            <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/20 to-transparent"></div>
-            <div className="relative z-10">
-               <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60">Node Pulse</span>
-               <h4 className="text-2xl font-black uppercase tracking-tighter mt-2 mb-6">Real-Time Sync State</h4>
-               <div className="space-y-6">
-                  <div className="flex items-center gap-4">
-                     <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.8)]"></div>
-                     <span className="text-[11px] font-black uppercase tracking-widest">Master Cloud Active</span>
-                  </div>
-                  <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
-                     <p className="text-[8px] font-black text-sky-200 uppercase tracking-widest mb-1">Institutional ID</p>
-                     <p className="text-sm font-black tracking-widest">{settings.institutionalId || "NOT_PROVISIONED"}</p>
-                  </div>
-               </div>
-            </div>
-            <button 
-              onClick={() => onNavigate('ADMIN')}
-              className="relative z-10 w-full py-4 mt-8 bg-white text-indigo-700 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl hover:bg-sky-50 transition-colors"
-            >
-              System Configuration
-            </button>
          </div>
       </div>
     </div>

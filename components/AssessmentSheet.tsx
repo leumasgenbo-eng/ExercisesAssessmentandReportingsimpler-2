@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { AssessmentType, AssessmentData, Pupil, ExerciseMetadata, SchoolGroup, ManagementState, InterventionRecord } from '../types';
 import { EXERCISES_PER_TYPE, SUBJECTS_BY_GROUP, INTERVENTION_REASONS, INTERVENTION_ACTIONS } from '../constants';
@@ -77,8 +76,12 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
 
   const ensurePupilExists = (pupilId: string) => {
     if (!data.pupils.find(p => p.id === pupilId)) {
+      /**
+       * Added missing required studentId and scoreReasons for Pupil initialization
+       */
       const newPupil: Pupil = {
         id: pupilId,
+        studentId: `SID-${pupilId}`,
         name: `Pupil ${pupilId.split('-')[1]}`,
         scores: {},
         scoreReasons: {},
@@ -178,7 +181,7 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
 
   const gridRows = Array.from({ length: Math.max(25, data.pupils.length) }, (_, i) => {
     const p = data.pupils[i];
-    return p || { id: `auto-${i + 1}`, name: '', scores: {}, scoreReasons: {}, interventionReason: "", interventions: [] };
+    return p || { id: `auto-${i + 1}`, studentId: '', name: '', scores: {}, scoreReasons: {}, interventionReason: "", interventions: [] };
   });
 
   const updatePupilName = (id: string, name: string) => {
@@ -276,6 +279,7 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
 
           return {
             id: `p-up-${Date.now()}-${idx}`,
+            studentId: `UP-${idx}-${Date.now()}`,
             name: name.toUpperCase(),
             scores,
             scoreReasons: {},
@@ -311,6 +315,7 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
 
     const newPupils: Pupil[] = names.map((name, idx) => ({
       id: `p-paste-${Date.now()}-${idx}`,
+      studentId: `PASTE-${idx}-${Date.now()}`,
       name: name.toUpperCase(),
       scores: {},
       scoreReasons: {},
@@ -348,7 +353,7 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                  Paste
                </button>
-               <input type="file" ref={fileInputRef} onChange={handleCSVUpload} className="hidden" accept=".csv" />
+               <input type="file" hide="true" ref={fileInputRef} onChange={handleCSVUpload} className="hidden" accept=".csv" />
              </div>
            </div>
 
@@ -364,7 +369,7 @@ const AssessmentSheet: React.FC<Props> = ({ type, data, onUpdate, selectedExerci
               >
                 {saveStatus === 'SAVED' ? 'Saved' : saveStatus === 'SAVING' ? 'Saving' : 'Save'}
               </button>
-              <button onClick={() => onUpdate({...data, pupils: [...data.pupils, {id: Date.now().toString(), name: '', scores: {}, scoreReasons: {}, interventionReason: "", interventions: []}]})} className="bg-sky-950 text-white text-[8px] font-black px-3 py-2 rounded-lg uppercase shadow-lg">New Pupil +</button>
+              <button onClick={() => onUpdate({...data, pupils: [...data.pupils, {id: Date.now().toString(), studentId: '', name: '', scores: {}, scoreReasons: {}, interventionReason: "", interventions: []}]})} className="bg-sky-950 text-white text-[8px] font-black px-3 py-2 rounded-lg uppercase shadow-lg">New Pupil +</button>
            </div>
         </div>
 

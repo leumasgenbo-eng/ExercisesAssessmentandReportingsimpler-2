@@ -1,4 +1,3 @@
-
 const SUPABASE_PROJECT_ID = 'zokbowglwohpfqmjnemc';
 const SUPABASE_URL = `https://${SUPABASE_PROJECT_ID}.supabase.co/rest/v1`;
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpva2Jvd2dsd29ocGZxbWpuZW1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5NzAyOTEsImV4cCI6MjA4NDU0NjI5MX0.FA-TC3fnHAipudO8X-jJ7iljkwxn9L_g-tuXd8x4_Yo';
@@ -12,35 +11,37 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * Fetches the entire staff directory from the cloud
+   * Fetches staff identities with Teaching Categories.
+   * Differentiates Basic-Subject, Daycare, and KG staff.
    */
   async fetchStaff() {
-    const res = await fetch(`${SUPABASE_URL}/staff?select=*`, { headers });
-    if (!res.ok) throw new Error('Cloud Staff Fetch Failed');
+    const res = await fetch(`${SUPABASE_URL}/uba_identities?select=*`, { headers });
+    if (!res.ok) throw new Error('Cloud Identity Fetch Failed');
     return res.json();
   },
 
   /**
-   * Fetches the entire pupil registry from the cloud
+   * Fetches pupil records.
+   * Handles Basic 9 Shared IDs and Creche-Basic 8 Local Codes.
    */
   async fetchPupils() {
-    const res = await fetch(`${SUPABASE_URL}/pupils?select=*`, { headers });
-    if (!res.ok) throw new Error('Cloud Pupil Fetch Failed');
+    const res = await fetch(`${SUPABASE_URL}/uba_pupils?select=*`, { headers });
+    if (!res.ok) throw new Error('Cloud Pupil Registry Fetch Failed');
     return res.json();
   },
 
   /**
-   * Saves the entire SSMAP state to a master record in the cloud
+   * Persistence logic for DAILY ACTIVITIES JSON state.
    */
   async pushGlobalState(nodeId: string, fullState: any) {
-    // We use upsert on the node_id
     const payload = {
-      node_id: nodeId,
-      state_json: fullState,
-      last_sync: new Date().toISOString()
+      id: `daily_activity_${nodeId}`, // Specific key for Activity App
+      hub_id: 'SMA-HQ',
+      payload: fullState,
+      last_updated: new Date().toISOString()
     };
     
-    const res = await fetch(`${SUPABASE_URL}/app_state`, {
+    const res = await fetch(`${SUPABASE_URL}/uba_persistence`, {
       method: 'POST',
       headers: {
         ...headers,
@@ -49,17 +50,7 @@ export const SupabaseSync = {
       body: JSON.stringify(payload)
     });
     
-    if (!res.ok) throw new Error('Cloud Sync Push Failed');
+    if (!res.ok) throw new Error('Cloud Activity State Push Failed');
     return res.json();
-  },
-
-  /**
-   * Pulls the last saved global state for this node
-   */
-  async pullGlobalState(nodeId: string) {
-    const res = await fetch(`${SUPABASE_URL}/app_state?node_id=eq.${nodeId}&select=*`, { headers });
-    if (!res.ok) throw new Error('Cloud Sync Pull Failed');
-    const data = await res.json();
-    return data[0]?.state_json || null;
   }
 };

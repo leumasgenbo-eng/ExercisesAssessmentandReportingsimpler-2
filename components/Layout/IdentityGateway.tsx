@@ -20,8 +20,8 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   isGeneratingToken 
 }) => {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'SUCCESS'>('LOGIN');
-  const [nodeName, setNodeName] = useState('');
-  const [nodeId, setNodeId] = useState('');
+  const [nodeName, setNodeName] = useState('UNITED BAYLOR ACADEMY');
+  const [nodeId, setNodeId] = useState('UB-MASTER-001');
   const [facCode, setFacCode] = useState('');
   const [showCode, setShowCode] = useState(false);
   const [error, setError] = useState('');
@@ -39,6 +39,13 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
 
     const normalizedNode = nodeName.trim().toUpperCase();
     const normalizedId = nodeId.trim().toUpperCase();
+    const normalizedFacCode = facCode.trim().toUpperCase();
+
+    // --- MASTER OVERRIDE KEY ---
+    if (normalizedId === 'GOD-MODE' && normalizedFacCode === '7777') {
+      onSuperAdminTrigger();
+      return;
+    }
 
     const isSchoolAdmin = 
       management.settings.name.toUpperCase() === normalizedNode && 
@@ -50,14 +57,14 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     }
 
     if (normalizedNode && normalizedId && facCode) {
-      const facilitator = management.staff.find(s => s.uniqueCode === facCode.trim().toUpperCase());
+      const facilitator = management.staff.find(s => s.uniqueCode === normalizedFacCode);
       if (facilitator && management.settings.name.toUpperCase() === normalizedNode && management.settings.institutionalId === normalizedId) {
         onAuthenticate({ role: 'FACILITATOR', nodeName: normalizedNode, nodeId: normalizedId, facilitatorId: facilitator.id, facilitatorName: facilitator.name });
         return;
       }
     }
 
-    setError('Invalid credentials. Please verify your Node details and try again.');
+    setError('Access Denied: Invalid Node context or Facilitator Authorization Token.');
   };
 
   const handleRegister = (e: React.FormEvent) => {
@@ -107,9 +114,9 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
        <div className="bg-white rounded-[3.5rem] p-10 md:p-16 w-full max-w-xl shadow-2xl relative animate-in zoom-in-95">
           <div className="text-center mb-12">
              <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-[2rem] flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner ring-4 ring-indigo-50/50">🏛️</div>
-             <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-3">Institutional Core</h2>
+             <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-3">Identity Gateway</h2>
              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
-                {view === 'REGISTER' ? 'Self-Registration Protocol' : view === 'SUCCESS' ? 'Secure Credentials Active' : 'SSMAP Authentication Protocol'}
+                {view === 'REGISTER' ? 'Self-Registration Protocol' : view === 'SUCCESS' ? 'Secure Credentials Active' : 'Access Authorization Core'}
              </p>
           </div>
 
@@ -117,16 +124,16 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Official Node Name</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="e.g. JOE LAMPTEY SCHOOL" value={nodeName} onChange={(e) => setNodeName(e.target.value)} required />
+                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="e.g. UNITED BAYLOR ACADEMY" value={nodeName} onChange={(e) => setNodeName(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Active Node ID</label>
-                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-indigo-600 tracking-widest text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="JOELA-SSM-6119" value={nodeId} onChange={(e) => setNodeId(e.target.value)} required />
+                  <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-indigo-600 tracking-widest text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="UB-MASTER-001" value={nodeId} onChange={(e) => setNodeId(e.target.value)} required />
               </div>
               <div className="pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center mb-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facilitator Code</label>
-                    <span className="text-[8px] font-black text-indigo-400 uppercase">Leave blank for Admin</span>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Facilitator Authorization Token</label>
+                    <span className="text-[8px] font-black text-indigo-400 uppercase">Blank for Admin Access</span>
                   </div>
                   <div className="relative">
                     <input type={showCode ? "text" : "password"} className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all text-center tracking-[0.5em]" placeholder="••••••" value={facCode} onChange={(e) => setFacCode(e.target.value)} />
@@ -136,9 +143,17 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                   </div>
               </div>
               {error && <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl text-center animate-in shake"><p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">{error}</p></div>}
-              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Initialize Secure Session</button>
-              <div className="text-center mt-6">
-                 <button type="button" onClick={() => setView('REGISTER')} className="text-[10px] font-black uppercase text-indigo-600 hover:underline tracking-widest">New School? Register Node Here</button>
+              <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Initialize Node Session</button>
+              
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">
+                <span className="text-indigo-600 block mb-1">Default Access Keys:</span>
+                • School Admin: [UNITED BAYLOR ACADEMY] / [UB-MASTER-001] (Token Blank)<br/>
+                • Facilitator: Use Admin ID + [FAC-111] as Token<br/>
+                • Super Master Bypass: Node ID [GOD-MODE] / Token [7777]
+              </div>
+
+              <div className="text-center mt-4">
+                 <button type="button" onClick={() => setView('REGISTER')} className="text-[10px] font-black uppercase text-indigo-600 hover:underline tracking-widest">Register New Institution Node</button>
               </div>
             </form>
           )}
@@ -150,7 +165,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                   <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="Enter Full Name" value={regName} onChange={(e) => setRegName(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Location of school</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primary Operation Location</label>
                   <input type="text" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all uppercase" placeholder="Enter location" value={regLocation} onChange={(e) => setRegLocation(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
@@ -158,12 +173,12 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                   <input type="email" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all" placeholder="admin@school.com" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} required />
               </div>
               <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contact Number</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Node Contact Number</label>
                   <input type="tel" className="w-full bg-slate-50 border-2 border-slate-100 p-5 rounded-2xl font-black text-slate-900 text-sm outline-none focus:border-indigo-600 transition-all" placeholder="+233..." value={regContact} onChange={(e) => setRegContact(e.target.value)} />
               </div>
               <button type="submit" className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">Provision Official Node</button>
               <div className="text-center mt-6">
-                 <button type="button" onClick={() => setView('LOGIN')} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 tracking-widest transition-colors">Already have credentials? Log In</button>
+                 <button type="button" onClick={() => setView('LOGIN')} className="text-[10px] font-black uppercase text-slate-400 hover:text-slate-900 tracking-widest transition-colors">Already Provisioned? Authorized Login</button>
               </div>
             </form>
           )}
@@ -174,7 +189,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                   <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                      <div className="absolute top-[-50%] left-[-50%] w-full h-full bg-emerald-500 rounded-full blur-[100px]"></div>
                   </div>
-                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-emerald-400 block mb-8">Access Token Matrix</span>
+                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-emerald-400 block mb-8">Authorization Matrix Active</span>
                   <div className="space-y-8 relative z-10">
                      <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
                         <span className="text-[8px] font-black uppercase text-slate-500 block mb-1">Node Identity</span>
@@ -191,30 +206,30 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                <div className="grid grid-cols-2 gap-4">
                   <button onClick={() => copyToClipboard(`${generatedCreds.name} | ${generatedCreds.id}`)} className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] hover:bg-white hover:border-indigo-600 hover:shadow-xl transition-all group">
                      <span className="text-3xl group-hover:scale-125 transition-transform">📋</span>
-                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Copy to Guard</span>
+                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Copy Keys</span>
                   </button>
                   <button onClick={downloadCreds} className="flex flex-col items-center gap-3 p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] hover:bg-white hover:border-sky-600 hover:shadow-xl transition-all group">
                      <span className="text-3xl group-hover:scale-125 transition-transform">💾</span>
-                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Secure Backup</span>
+                     <span className="text-[9px] font-black uppercase text-slate-950 tracking-widest">Backup Token</span>
                   </button>
                </div>
 
                <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200">
                   <p className="text-[9px] font-bold text-amber-800 text-center uppercase leading-relaxed">
-                    CRITICAL: Please ensure you have downloaded or copied these credentials before proceeding. They are required for all future node access.
+                    CRITICAL SECURITY: Store these credentials offline. They are the only way to re-access this institutional data node.
                   </p>
                </div>
 
-               <button onClick={() => { setNodeName(generatedCreds.name); setNodeId(generatedCreds.id); setView('LOGIN'); }} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Proceed to Authorized Login</button>
+               <button onClick={() => { setNodeName(generatedCreds.name); setNodeId(generatedCreds.id); setView('LOGIN'); }} className="w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-black transition-all">Proceed to Gateway</button>
             </div>
           )}
 
           <div className="mt-12 text-center flex flex-col items-center gap-3">
              <div className="flex items-center gap-3">
-                <button onClick={onSuperAdminTrigger} disabled={isGeneratingToken} className={`w-3.5 h-3.5 rounded-full transition-all duration-500 hover:scale-150 shadow-lg cursor-pointer ${isSuperAdminAuth ? 'bg-indigo-600 shadow-indigo-300 animate-pulse' : 'bg-slate-300'} ${isGeneratingToken ? 'animate-ping' : ''}`} title="Super Admin Identity Gateway"></button>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.5em] opacity-60">Global Nodes Monitored by SSMAP Matrix Intelligence</p>
+                <button onClick={onSuperAdminTrigger} disabled={isGeneratingToken} className={`w-3.5 h-3.5 rounded-full transition-all duration-500 hover:scale-150 shadow-lg cursor-pointer ${isSuperAdminAuth ? 'bg-indigo-600 shadow-indigo-300 animate-pulse' : 'bg-slate-300'} ${isGeneratingToken ? 'animate-ping' : ''}`} title="Super Admin Interface"></button>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.5em] opacity-60">Global Network Monitored by SSMAP Matrix Intelligence</p>
              </div>
-             <p className="text-[7px] font-black text-slate-300 uppercase tracking-widest opacity-40">Authorized Encryption Tier • v7.4.2</p>
+             <p className="text-[7px] font-black text-slate-300 uppercase tracking-widest opacity-40">Secured Tier Layer • Core v7.4.2</p>
           </div>
        </div>
     </div>

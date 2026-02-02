@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { ManagementState, AppState, AssessmentData, Pupil, InterventionRecord } from '../types';
 import { INTERVENTION_REASONS, INTERVENTION_ACTIONS, INITIAL_MANAGEMENT_DATA } from '../constants';
@@ -70,6 +69,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => {
       const dummyPupil: Pupil = {
         id: 'p-sim-1',
+        studentId: 'SIM-ID-001',
         name: 'SIM STUDENT',
         scores: { 1: '8', 2: '7', 3: '9', 4: '8', 5: '10' },
         scoreReasons: { 1: 'Review' },
@@ -107,7 +107,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         baseState.classWork[key] = {
           term: baseState.management.settings.currentTerm,
           year: baseState.management.settings.currentYear,
-          // Fix: Added missing required 'month' property
+          /**
+           * Added missing 'month' property to simulated assessment data
+           */
           month: "MONTH 1",
           week: w.toString(),
           className: 'Basic 7',
@@ -136,7 +138,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="flex gap-2">
             <button onClick={handleBackup} className="flex-1 bg-white border border-rose-100 text-rose-600 p-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Backup</button>
             <button onClick={() => restoreInputRef.current?.click()} className="flex-1 bg-white border border-rose-100 text-rose-600 p-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Restore</button>
-            <input type="file" ref={restoreInputRef} onChange={handleRestore} className="hidden" accept=".json" />
+            <input type="file" hide="true" ref={restoreInputRef} onChange={handleRestore} className="hidden" accept=".json" />
           </div>
         </div>
       </div>

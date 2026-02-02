@@ -52,10 +52,14 @@ const StaffRoster: React.FC<Props> = ({
   const addStaff = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName) return;
+    /**
+     * Fixed: Added missing 'category' property for new staff member
+     */
     const newS: Staff = { 
       id: `s-${Date.now()}`, 
       name: newName.toUpperCase(), 
       role: 'Facilitator', 
+      category: 'BASIC_SUBJECT_LEVEL',
       email: '',
       uniqueCode: '' 
     };
@@ -112,6 +116,10 @@ const StaffRoster: React.FC<Props> = ({
               id: s.id || `s-up-${Date.now()}-${idx}`,
               name: (s.name || '').toUpperCase(),
               role: s.role || 'Facilitator',
+              /**
+               * Added default category during JSON bulk ingestion
+               */
+              category: s.category || 'BASIC_SUBJECT_LEVEL',
               email: s.email || '',
               uniqueCode: s.uniqueCode || ''
             }));
@@ -122,11 +130,15 @@ const StaffRoster: React.FC<Props> = ({
           
           newStaff = lines.slice(1).map((line, idx) => {
             const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(p => p.replace(/^"|"$/g, '').trim());
-            const s: any = { id: `s-up-${Date.now()}-${idx}`, role: 'Facilitator' };
+            /**
+             * Added default category during CSV bulk ingestion
+             */
+            const s: any = { id: `s-up-${Date.now()}-${idx}`, role: 'Facilitator', category: 'BASIC_SUBJECT_LEVEL' };
             
             headers.forEach((h, hIdx) => {
               if (h === 'name') s.name = parts[hIdx]?.toUpperCase();
               if (h === 'role') s.role = parts[hIdx] || 'Facilitator';
+              if (h === 'category') s.category = parts[hIdx] || 'BASIC_SUBJECT_LEVEL';
               if (h === 'email') s.email = parts[hIdx] || '';
               if (h === 'uniquecode' || h === 'code') s.uniqueCode = parts[hIdx] || '';
               if (h === 'id' && parts[hIdx]) s.id = parts[hIdx];
@@ -207,7 +219,7 @@ const StaffRoster: React.FC<Props> = ({
                <button onClick={() => staffFileInputRef.current?.click()} className="p-2 bg-slate-50 text-slate-400 hover:text-sky-600 rounded-lg transition-all" title="Bulk Import Roster">
                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                </button>
-               <input type="file" ref={staffFileInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json" />
+               <input type="file" hide="true" ref={staffFileInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json" />
             </div>
           </div>
           

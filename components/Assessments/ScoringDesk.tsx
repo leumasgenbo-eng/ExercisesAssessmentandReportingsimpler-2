@@ -43,11 +43,14 @@ const ScoringDesk: React.FC<Props> = ({
     if (masterList.length > 0) {
       syncedList = masterList.map((m, idx) => {
         const existing = (m.studentId ? existingByStudentId.get(m.studentId) : null) || existingByName.get(m.name);
+        /**
+         * Fixed: Added missing required Pupil properties studentId and scoreReasons during initialization from master list
+         */
         return {
           id: existing?.id || `m-${idx}-${Date.now()}`,
           name: m.name, 
           gender: m.gender,
-          studentId: m.studentId,
+          studentId: m.studentId || `SID-${idx}-${Date.now()}`,
           bookOpen: existing?.bookOpen ?? true,
           scores: existing?.scores || {},
           interventions: existing?.interventions || [],
@@ -57,7 +60,7 @@ const ScoringDesk: React.FC<Props> = ({
       });
     } else {
       syncedList = data.pupils.length > 0 ? data.pupils : Array.from({ length: 30 }, (_, i) => ({
-        id: `auto-${i}`, name: '', bookOpen: true, scores: {}, interventions: []
+        id: `auto-${i}`, studentId: '', name: '', bookOpen: true, scores: {}, interventions: [], scoreReasons: {}
       } as Pupil));
     }
 
@@ -93,6 +96,9 @@ const ScoringDesk: React.FC<Props> = ({
       notes: notes,
       facilitator: data.facilitator || 'System'
     };
+    /**
+     * Fixed: Use interventionReason property which is now allowed in Pupil interface
+     */
     updatePupil(activeInterventionPupil.id, { 
       interventions: [...(activeInterventionPupil.interventions || []), newInt],
       interventionReason: reason
@@ -148,7 +154,7 @@ const ScoringDesk: React.FC<Props> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-           <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,image/*" />
+           <input type="file" hide="true" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,image/*" />
            
            {data.attachment ? (
              <div className="flex gap-1.5 shrink-0">
