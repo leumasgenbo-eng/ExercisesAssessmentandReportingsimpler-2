@@ -135,7 +135,7 @@ const ScoringDesk: React.FC<Props> = ({
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pb-40">
-      {/* FINAL HEADER: "1: Class Assignment/ACTIVITIES SCHOOL: UNITED BAYLOR A. CLS: ASSESSMENT SHEET" */}
+      {/* REQUIRED HEADER: "1: Class Assignment/ACTIVITIES SCHOOL: UNITED BAYLOR A. CLS: ASSESSMENT SHEET" */}
       <div className="mb-6 md:mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6 no-print border-b-2 border-slate-100 pb-6 md:pb-8">
         <div className="w-full md:w-auto">
            <div className="flex flex-col gap-3 mb-1 justify-start">

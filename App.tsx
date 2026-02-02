@@ -210,7 +210,7 @@ const App: React.FC = () => {
 
           {activeView === 'ASSESSMENT' && (
             <div className="space-y-6">
-              {/* EXACT HEADER REQUIREMENT */}
+              {/* EXACT HEADER REQUIREMENT: 1: Class Assignment/ACTIVITIES SCHOOL: UNITED BAYLOR A. CLS: ASSESSMENT SHEET */}
               <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl no-print">
                  <div className="flex items-center gap-4">
                     <span className="bg-indigo-600 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">1: Class Assignment/ACTIVITIES</span>
@@ -301,13 +301,6 @@ const App: React.FC = () => {
         </div>
         <div className="flex items-center gap-6">
           <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
-          {session.role !== 'super_admin' && (
-            <button 
-              onDoubleClick={() => navigateToView('SUPER_ADMIN')}
-              className="w-5 h-5 bg-transparent opacity-0 cursor-default"
-              title="System Debug Gateway"
-            ></button>
-          )}
         </div>
       </footer>
     </div>

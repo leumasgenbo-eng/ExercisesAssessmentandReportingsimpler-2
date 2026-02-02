@@ -41,27 +41,59 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCloudPull = async () => {
     setSyncStatus('FETCHING');
     try {
-      // Fix: Added data.settings.hubId as required argument for fetchStaff call to resolve TypeScript error on line 44
+      // Handshake with specific institutional hub
       const remoteStaff = await SupabaseSync.fetchStaff(data.settings.hubId);
-      // Fix: Added data.settings.hubId as required argument for fetchPupils call
       const remotePupils = await SupabaseSync.fetchPupils(data.settings.hubId);
+      
       const newManagement = { ...data };
-      if (remoteStaff.length > 0) newManagement.staff = remoteStaff.map((s: any) => ({ id: s.id.toString(), name: s.name, role: s.role, category: s.category || 'BASIC_SUBJECT_LEVEL', email: s.email, uniqueCode: s.unique_code }));
+
+      // Deduplication Protocol: Use unique_code for staff to prevent overlapping identities
+      if (remoteStaff.length > 0) {
+        const staffMap = new Map();
+        remoteStaff.forEach((s: any) => {
+          staffMap.set(s.unique_code, { 
+            id: s.email, 
+            name: s.full_name, 
+            role: s.role, 
+            category: s.teaching_category || 'BASIC_SUBJECT_LEVEL', 
+            email: s.email, 
+            uniqueCode: s.unique_code 
+          });
+        });
+        newManagement.staff = Array.from(staffMap.values());
+      }
+
+      // Deduplication Protocol: Use student_id to prevent redundant roster entries
       if (remotePupils.length > 0) {
         const master: Record<string, MasterPupilEntry[]> = {};
+        const globalPupilMap = new Map();
+
         remotePupils.forEach((p: any) => {
           if (!master[p.class_name]) master[p.class_name] = [];
-          /**
-           * Fixed: Added missing 'isJhsLevel' property to comply with MasterPupilEntry interface
-           */
-          master[p.class_name].push({ name: p.name, gender: p.gender as any, studentId: p.student_id, isJhsLevel: !!p.is_jhs });
+          
+          // Only add if student_id hasn't been processed yet for this pull
+          if (!globalPupilMap.has(p.student_id)) {
+            const entry = { 
+              name: p.name, 
+              gender: p.gender as any, 
+              studentId: p.student_id, 
+              isJhsLevel: !!p.is_jhs_level 
+            };
+            master[p.class_name].push(entry);
+            globalPupilMap.set(p.student_id, true);
+          }
         });
         newManagement.masterPupils = master;
       }
+
       onUpdateManagement(newManagement);
       setSyncStatus('SUCCESS');
       setTimeout(() => setSyncStatus('IDLE'), 3000);
-    } catch (err) { setSyncStatus('ERROR'); alert("Cloud Sync Handshake Failed."); }
+    } catch (err) { 
+      console.error(err);
+      setSyncStatus('ERROR'); 
+      alert("Cloud Sync Handshake Failed."); 
+    }
   };
 
   const tabs = [

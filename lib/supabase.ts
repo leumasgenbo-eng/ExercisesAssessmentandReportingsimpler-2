@@ -43,7 +43,7 @@ export const SupabaseSync = {
   },
 
   /**
-   * Pushes the full app state to the cloud shard
+   * Pushes the full app state to the cloud shard with deduplication handling
    */
   async pushGlobalState(nodeId: string, hubId: string, fullState: any) {
     const payload = {
@@ -57,6 +57,7 @@ export const SupabaseSync = {
       method: 'POST',
       headers: {
         ...headers,
+        // CRITICAL: Prevent duplicate shards by merging on primary key 'id'
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify(payload)
