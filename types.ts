@@ -1,5 +1,5 @@
 /**
- * SSMAP CORE SCHEMA v9.5.0
+ * SSMAP CORE SCHEMA v9.5.8
  * United Baylor Academy - Daily Activity Pulse System
  */
 
@@ -20,7 +20,18 @@ export type EmploymentType = 'FULL_TIME' | 'PART_TIME';
 
 export type UserRole = 'super_admin' | 'school_admin' | 'facilitator' | 'pupil';
 
-export type ManagementSubView = 'COMPLIANCE' | 'PLANNING' | 'SUBJECT_MAPPING';
+export type ManagementSubView = 'COMPLIANCE' | 'PLANNING' | 'SUBJECT_MAPPING' | 'CURRICULUM';
+
+export interface CurriculumEntry {
+  id: string;
+  levelGroup: SchoolGroup;
+  subject: string;
+  strand: string;
+  subStrand?: string;
+  contentStandard?: string;
+  indicatorCode: string;
+  indicatorText: string;
+}
 
 export interface UserSession {
   role: UserRole;
@@ -31,8 +42,8 @@ export interface UserSession {
   facilitatorName?: string;
   facilitatorCategory?: FacilitatorCategory;
   pupilId?: string;
-  meritBalance?: number;    // v9.5 Financials
-  monetaryBalance?: number; // v9.5 Financials
+  meritBalance?: number;    
+  monetaryBalance?: number; 
 }
 
 export interface Staff {
@@ -188,7 +199,7 @@ export interface ManagementState {
   messages: Message[];
   superAdminRegistry?: RegisteredSchool[];
   logs?: any[];
-  curriculum?: any[];
+  curriculum: CurriculumEntry[];
 }
 
 export interface AppState {

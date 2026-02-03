@@ -33,17 +33,22 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regSlogan, setRegSlogan] = useState('');
-  const [lastCredentials, setLastCredentials] = useState<{ nodeId: string, name: string, merit?: number, money?: number } | null>(null);
+
+  // Stashed state to hold cloud data after download but before app entry
+  const [stashedSession, setStashedSession] = useState<UserSession | null>(null);
+  const [stashedState, setStashedState] = useState<AppState | null>(null);
 
   const initiateHandshake = async (session: UserSession) => {
     setView('HANDSHAKE');
     setSyncStatus('Linking...');
     
     try {
+      // 1. Download the Institutional AppState Shard (100% Data Capture)
       setSyncStatus(`Syncing Node: ${session.nodeId}...`);
       const hydratedPayload = await SupabaseSync.fetchPersistence(session.nodeId, session.hubId || 'SMA-HQ');
       
-      setSyncStatus('Updating Roster...');
+      // 2. Download the Global Pupil Roster for this Hub
+      setSyncStatus('Updating Roster Matrix...');
       const remotePupils = await SupabaseSync.fetchPupils(session.hubId || 'SMA-HQ');
       
       const master: Record<string, MasterPupilEntry[]> = {};
@@ -57,27 +62,26 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
         });
       });
 
-      let finalState: AppState | undefined = hydratedPayload;
+      // Prepare the final state for the app
+      let finalState: AppState | null = hydratedPayload;
       if (finalState && finalState.management) {
         finalState.management.masterPupils = master;
       }
 
       setSyncStatus('Authorized.');
-      setLastCredentials({ 
-        nodeId: session.nodeId, 
-        name: session.facilitatorName || session.nodeName,
-        merit: session.meritBalance,
-        money: session.monetaryBalance
-      });
+      setStashedSession(session);
+      setStashedState(finalState);
       
+      // Auto-advance for super admin, or show success screen for local nodes
       if (session.role === 'super_admin') {
-        onAuthenticate(session, finalState);
+        onAuthenticate(session, finalState || undefined);
       } else {
         setView('SUCCESS');
       }
 
     } catch (err) {
-      setError('Handshake Rejected.');
+      console.error('Handshake Error:', err);
+      setError('Handshake Rejected. Cloud Node Offline.');
       setView('GATES');
     }
   };
@@ -100,8 +104,8 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
         hubId: 'SMA-HQ',
         originGate: 'ADMIN'
       });
-      setLastCredentials({ nodeId, name: regName.toUpperCase() });
-      setView('SUCCESS');
+      setView('GATES');
+      alert(`Node Registered! Use Node ID: ${nodeId} to log in.`);
     } catch (err) {
       setError('Registration Error.');
       setView('REGISTER');
@@ -132,6 +136,10 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
             setView('FORM');
             return;
         }
+        
+        // v9.5.7: Pulling detailed facilitator info if available
+        const facDetail = identity.facilitator_detail || {};
+        
         initiateHandshake({
             role: identity.role,
             nodeName: identity.node_id,
@@ -139,13 +147,19 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
             hubId: identity.hub_id,
             facilitatorId: identity.email,
             facilitatorName: identity.full_name,
-            facilitatorCategory: identity.teaching_category,
+            facilitatorCategory: facDetail.teaching_category || 'BASIC_SUBJECT_LEVEL',
             meritBalance: identity.merit_balance || 0,
             monetaryBalance: identity.monetary_balance || 0
         });
     } catch (err) {
         setError('Connection Timeout.');
         setView('FORM');
+    }
+  };
+
+  const finalizeAuthentication = () => {
+    if (stashedSession) {
+      onAuthenticate(stashedSession, stashedState || undefined);
     }
   };
 
@@ -157,7 +171,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                <div className="text-center">
                   <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 shadow-xl">🏛️</div>
                   <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-1">Institutional Gateway</h2>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Access Protocol v9.5</p>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Access Protocol v9.5.7</p>
                </div>
 
                <div className="grid grid-cols-1 gap-2.5">
@@ -212,30 +226,32 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                </div>
                <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-xl hover:bg-indigo-700 transition-all">Provision Node</button>
             </form>
-          ) : view === 'SUCCESS' && lastCredentials ? (
+          ) : view === 'SUCCESS' && stashedSession ? (
             <div className="text-center animate-in zoom-in-95">
                <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-xl mx-auto mb-4 shadow-sm">✓</div>
                <h3 className="text-lg font-black text-slate-900 uppercase mb-1">Handshake Secured</h3>
-               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">{lastCredentials.name}</p>
+               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">
+                 Welcome, {stashedSession.facilitatorName || stashedSession.nodeName}
+               </p>
                
                <div className="grid grid-cols-2 gap-2 mb-4">
                  <div className="bg-slate-50 p-3 rounded-2xl border-2 border-slate-100">
                     <span className="text-[7px] font-black text-slate-400 uppercase block mb-1">Merit Pool</span>
-                    <div className="text-lg font-black text-indigo-600">{lastCredentials.merit || 0}</div>
+                    <div className="text-lg font-black text-indigo-600">{stashedSession.meritBalance || 0}</div>
                  </div>
                  <div className="bg-slate-50 p-3 rounded-2xl border-2 border-slate-100">
                     <span className="text-[7px] font-black text-slate-400 uppercase block mb-1">Vault GHS</span>
-                    <div className="text-lg font-black text-emerald-600">₵{lastCredentials.money?.toFixed(2) || '0.00'}</div>
+                    <div className="text-lg font-black text-emerald-600">₵{stashedSession.monetaryBalance?.toFixed(2) || '0.00'}</div>
                  </div>
                </div>
 
                <div className="bg-slate-900 p-4 rounded-2xl mb-8">
-                  <span className="text-[7px] font-black text-slate-400 uppercase block mb-1">Secure Node ID</span>
-                  <div className="text-lg font-black text-white tracking-widest">{lastCredentials.nodeId}</div>
+                  <span className="text-[7px] font-black text-slate-400 uppercase block mb-1">Node Status</span>
+                  <div className="text-lg font-black text-emerald-400 tracking-widest uppercase">Data Synced</div>
                </div>
 
                <button 
-                 onClick={() => window.location.reload()} 
+                 onClick={finalizeAuthentication} 
                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase text-[9px] tracking-[0.2em] shadow-xl"
                >
                  Enter Terminal Hub

@@ -1,4 +1,4 @@
-import { AssessmentData, ManagementState, SchoolGroup, AssessmentType } from './types';
+import { AssessmentData, ManagementState, SchoolGroup, AssessmentType, CurriculumEntry } from './types';
 
 export const SCHOOL_NAME = "UNITED BAYLOR A.";
 export const SHEET_TITLE = "1: Class Assignment/ACTIVITIES";
@@ -58,22 +58,6 @@ export const INTERVENTION_ACTIONS = [
   "A12: Sensory/Focus Break Strategy"
 ];
 
-export const LITERACY_ASPECTS = [
-  "Oral Language (Listening & Speaking)",
-  "Reading (Phonics & Comprehension)",
-  "Writing (Composition & Mechanics)",
-  "Grammar (Usage & Vocabulary)",
-  "Creative Text & Literature"
-];
-
-export const LITERACY_INDICATOR_CATEGORIES = [
-  "Auditory Processing & Expression",
-  "Decoding & Text Interpretation",
-  "Sentence Structure & Orthography",
-  "Parts of Speech & Punctuation",
-  "Critical Analysis & Creativity"
-];
-
 export const SCHOOL_HIERARCHY: Record<SchoolGroup, { label: string; classes: string[] }> = {
   DAYCARE: {
     label: "Daycare",
@@ -85,79 +69,36 @@ export const SCHOOL_HIERARCHY: Record<SchoolGroup, { label: string; classes: str
   },
   LOWER_BASIC: {
     label: "Lower Basic",
-    classes: [
-      "Basic 1A", "Basic 1B", "Basic 2A", "Basic 2B", "Basic 3A", "Basic 3B"
-    ]
+    classes: ["Basic 1A", "Basic 1B", "Basic 2A", "Basic 2B", "Basic 3A", "Basic 3B"]
   },
   UPPER_BASIC: {
     label: "Upper Basic",
-    classes: [
-      "Basic 4A", "Basic 4B", "Basic 5A", "Basic 5B", "Basic 6A", "Basic 6B"
-    ]
+    classes: ["Basic 4A", "Basic 4B", "Basic 5A", "Basic 5B", "Basic 6A", "Basic 6B"]
   },
   JHS: {
     label: "Junior High",
-    classes: [
-      "Basic 7A", "Basic 7B", 
-      "Basic 8A", "Basic 8B", 
-      "Basic 9A", "Basic 9B"
-    ]
+    classes: ["Basic 7A", "Basic 7B", "Basic 8A", "Basic 8B", "Basic 9A", "Basic 9B"]
   }
 };
 
 export const SUBJECTS_BY_GROUP: Record<SchoolGroup, string[]> = {
   DAYCARE: [
-    "Numeracy",
-    "Creativity",
-    "Language and Literacy",
-    "Our World Our People (OWOP)",
-    "Any added subject or learning area"
+    "Numeracy", "Creativity", "Language and Literacy", "Our World Our People", "Physical Development"
   ],
   KINDERGARTEN: [
-    "Numeracy",
-    "Creativity",
-    "Language and Literacy",
-    "Our World Our People (OWOP)",
-    "Any added subject or learning area"
+    "Numeracy", "Creativity", "Language and Literacy", "Our World Our People", "Physical Development"
   ],
   LOWER_BASIC: [
-    "Religious and Moral Education",
-    "History",
-    "ICT",
-    "Creative Arts",
-    "Science",
-    "Our World Our People (OWOP)",
-    "Ghanaian Language Option",
-    "French",
-    "Mathematics",
-    "English Language",
-    "Physical Education"
+    "English Language", "Mathematics", "Science", "Our World Our People", "Religious and Moral Education",
+    "History", "Creative Arts", "Ghanaian Language", "French", "Physical Education", "Computing"
   ],
   UPPER_BASIC: [
-    "Religious and Moral Education",
-    "History",
-    "ICT",
-    "Creative Arts",
-    "Science",
-    "Our World Our People (OWOP)",
-    "Ghanaian Language Option",
-    "French",
-    "Mathematics",
-    "English Language",
-    "Physical Education"
+    "English Language", "Mathematics", "Science", "Our World Our People", "Religious and Moral Education",
+    "History", "Creative Arts", "Ghanaian Language", "French", "Physical Education", "Computing"
   ],
   JHS: [
-    "Religious and Moral Education",
-    "History",
-    "ICT",
-    "Creative Arts and Designing",
-    "Science",
-    "Career Technology",
-    "Ghanaian Language Option",
-    "French",
-    "Mathematics",
-    "English Language",
-    "Physical Education"
+    "English Language", "Mathematics", "Science", "Social Studies", "Religious and Moral Education",
+    "History", "Creative Arts and Design", "Career Technology", "Ghanaian Language", "French", "Computing", "Physical Education"
   ]
 };
 
@@ -198,11 +139,7 @@ export const INITIAL_MANAGEMENT_DATA: ManagementState = {
     currentYear: "2024/2025",
     activeMonth: "MONTH 1"
   },
-  staff: [
-    { id: 's1', name: 'John Doe', role: 'facilitator', category: 'BASIC_SUBJECT_LEVEL', email: 'john@baylor.edu', uniqueCode: 'FAC-111' }, 
-    { id: 's2', name: 'Jane Smith', role: 'facilitator', category: 'DAYCARE_FACILITATOR', email: 'jane@baylor.edu', uniqueCode: 'FAC-222' },
-    { id: 's3', name: 'Robert Wilson', role: 'facilitator', category: 'JHS_SPECIALIST', email: 'robert@baylor.edu', uniqueCode: 'FAC-333' }
-  ],
+  staff: [],
   subjects: Array.from(new Set(Object.values(SUBJECTS_BY_GROUP).flat())).map((name, i) => ({
     id: `sub${i + 1}`,
     name

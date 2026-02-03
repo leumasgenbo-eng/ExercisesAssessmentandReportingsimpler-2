@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ManagementState, WeeklyMapping, PlanningRemarks, AppState, ExerciseMetadata } from '../types';
-import { WEEK_COUNT, LITERACY_ASPECTS, LITERACY_INDICATOR_CATEGORIES } from '../constants';
+// Fix: Removed non-existent exported members 'LITERACY_ASPECTS' and 'LITERACY_INDICATOR_CATEGORIES' from '../constants'
+import { WEEK_COUNT } from '../constants';
 
 interface Props {
   data: ManagementState;
@@ -441,7 +442,7 @@ const PlanningPanel: React.FC<Props> = ({ data, onUpdate, fullAppState }) => {
               );
             })
           ) : (
-            <div className="py-40 text-center opacity-20">
+            <div className="py-40 text-center opacity-30 flex flex-col items-center">
               <p className="font-black uppercase tracking-widest text-[10px] text-sky-950">No duty mappings assigned to your profile</p>
             </div>
           )}

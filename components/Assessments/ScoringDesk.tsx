@@ -134,7 +134,7 @@ const ScoringDesk: React.FC<Props> = ({
   };
 
   const isInterviewMode = viewMode === 'INTERVIEW';
-  const schoolName = managementData?.settings.name || "OFFICIAL NODE";
+  const schoolName = managementData?.settings.name || "UNITED BAYLOR A.";
 
   return (
     <div className={`animate-in fade-in slide-in-from-bottom-4 duration-700 ${isInterviewMode ? 'pb-40' : 'pb-20'}`}>

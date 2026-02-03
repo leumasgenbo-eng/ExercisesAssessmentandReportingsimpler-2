@@ -10,31 +10,43 @@ const headers = {
 
 export const SupabaseSync = {
   /**
-   * v9.5 Handshake Protocol: Verify Identity and fetch available node data.
-   * Uses select=* to prevent hard errors if financial columns are not yet provisioned in the specific node.
+   * v9.5.7 Handshake Protocol: Verify Identity and link Facilitator Detail if available.
    */
   async verifyIdentity(fullName: string, nodeId: string) {
     const cleanName = fullName.trim();
     const cleanNode = nodeId.trim();
     
-    // Fixed: Using select=* to avoid "column does not exist" errors if schema is partially out of sync
+    // 1. Fetch from core Identity Hub
     const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*`;
     const res = await fetch(`${SUPABASE_URL}/uba_identities?${query}`, { headers });
     
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('Supabase Handshake Error:', errorText);
+      console.error('Supabase Identity Handshake Error:', errorText);
       throw new Error('Cloud Identity Lookup Failed');
     }
     
     const data = await res.json();
-    return data[0] || null;
+    const identity = data[0] || null;
+
+    if (identity && identity.role === 'facilitator') {
+      // 2. Supplement with Facilitator Registry details
+      const facRes = await fetch(`${SUPABASE_URL}/uba_facilitators?email=eq.${identity.email}&select=*`, { headers });
+      if (facRes.ok) {
+        const facData = await facRes.json();
+        if (facData[0]) {
+          return { ...identity, facilitator_detail: facData[0] };
+        }
+      }
+    }
+
+    return identity;
   },
 
   async fetchStaff(hubId: string) {
-    // Fixed: Simplified selection string
-    const res = await fetch(`${SUPABASE_URL}/uba_identities?hub_id=eq.${hubId}&select=*`, { headers });
-    if (!res.ok) throw new Error('Cloud Identity Fetch Failed');
+    // Returns full staff matrix including facilitator details
+    const res = await fetch(`${SUPABASE_URL}/uba_facilitators?hub_id=eq.${hubId}&select=*`, { headers });
+    if (!res.ok) throw new Error('Cloud Staff Registry Fetch Failed');
     return res.json();
   },
 
@@ -45,7 +57,7 @@ export const SupabaseSync = {
   },
 
   /**
-   * Retrieves the institutional state blob (Persistence Shard)
+   * Retrieves the institutional state blob (Persistence Shard) v9.5.7
    */
   async fetchPersistence(nodeId: string, hubId: string) {
     const persistenceId = `daily_activity_${hubId}_${nodeId}`;
@@ -56,13 +68,14 @@ export const SupabaseSync = {
   },
 
   /**
-   * Pushes the full app state to the cloud shard
+   * Pushes the full app state to the cloud shard with v9.5.7 version tag
    */
   async pushGlobalState(nodeId: string, hubId: string, fullState: any) {
     const payload = {
       id: `daily_activity_${hubId}_${nodeId}`, 
       hub_id: hubId,
       payload: fullState,
+      version_tag: 'v9.5.7',
       last_updated: new Date().toISOString()
     };
     
@@ -80,7 +93,7 @@ export const SupabaseSync = {
   },
 
   /**
-   * v9.5 Provisioning: Registers new school with explicit Identity Hub entry
+   * v9.5.7 Provisioning: Dual registration in Identity Hub and Facilitator Registry
    */
   async registerSchool(schoolData: { 
     name: string, 
@@ -90,14 +103,13 @@ export const SupabaseSync = {
     hubId: string,
     originGate: string 
   }) {
-    // 1. Provision the primary Admin Identity in the uba_identities table
+    // 1. Provision Identity
     const identityPayload = {
       email: schoolData.email.trim().toLowerCase(),
       full_name: schoolData.name.trim().toUpperCase(),
       node_id: schoolData.nodeId.trim().toUpperCase(),
       hub_id: schoolData.hubId,
-      role: 'school_admin',
-      teaching_category: 'ADMINISTRATOR',
+      role: schoolData.originGate === 'ADMIN' ? 'school_admin' : 'facilitator',
       merit_balance: 0,
       monetary_balance: 0
     };
@@ -108,60 +120,56 @@ export const SupabaseSync = {
       body: JSON.stringify(identityPayload)
     });
 
-    if (!idRes.ok) {
-      const err = await idRes.text();
-      console.error('Identity Provisioning Error:', err);
-      throw new Error('Identity Creation Failed');
+    if (!idRes.ok) throw new Error('Identity Creation Failed');
+
+    // 2. Provision Facilitator record if applicable
+    if (schoolData.originGate === 'FACILITATOR') {
+      const facPayload = {
+        email: schoolData.email.trim().toLowerCase(),
+        full_name: schoolData.name.trim().toUpperCase(),
+        hub_id: schoolData.hubId,
+        node_id: schoolData.nodeId.trim().toUpperCase(),
+        teaching_category: 'BASIC_SUBJECT_LEVEL',
+        merit_balance: 0,
+        monetary_balance: 0
+      };
+      await fetch(`${SUPABASE_URL}/uba_facilitators`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify(facPayload)
+      });
     }
 
-    // 2. Initialize the Institutional Persistence Shard
-    const persistenceId = `daily_activity_${schoolData.hubId}_${schoolData.nodeId}`;
-    const initialPayload = {
-        classWork: {},
-        homeWork: {},
-        projectWork: {},
-        criterionWork: {},
-        bookCountRecords: {},
-        management: {
-            settings: {
-                name: schoolData.name.toUpperCase(),
-                institutionalId: schoolData.nodeId.toUpperCase(),
-                hubId: schoolData.hubId,
-                slogan: schoolData.slogan || "Knowledge is Power",
-                currentTerm: "1ST TERM",
-                currentYear: "2024/2025",
-                activeMonth: "MONTH 1",
-                complianceThreshold: 0.85,
-                poorPerformanceThreshold: 10,
-                poorPerformanceFrequency: 3
-            },
-            staff: [{ 
-              id: schoolData.email, 
-              name: schoolData.name.toUpperCase(), 
-              role: 'school_admin', 
-              category: 'ADMINISTRATOR', 
-              email: schoolData.email,
-              uniqueCode: Math.floor(100000 + Math.random() * 900000).toString()
-            }],
-            subjects: [],
-            mappings: [],
-            weeklyMappings: [],
-            masterPupils: {},
-            messages: []
-        }
-    };
+    // 3. Initialize Persistence for Admins
+    if (schoolData.originGate === 'ADMIN') {
+        const persistenceId = `daily_activity_${schoolData.hubId}_${schoolData.nodeId}`;
+        const initialPayload = {
+            classWork: {}, homeWork: {}, projectWork: {}, criterionWork: {}, bookCountRecords: {},
+            management: {
+                settings: {
+                    name: schoolData.name.toUpperCase(),
+                    institutionalId: schoolData.nodeId.toUpperCase(),
+                    hubId: schoolData.hubId,
+                    slogan: schoolData.slogan || "Knowledge is Power",
+                    currentTerm: "1ST TERM", currentYear: "2024/2025", activeMonth: "MONTH 1",
+                    complianceThreshold: 0.85, poorPerformanceThreshold: 10, poorPerformanceFrequency: 3
+                },
+                staff: [{ id: schoolData.email, name: schoolData.name.toUpperCase(), role: 'school_admin', email: schoolData.email, uniqueCode: 'ADMIN-PIN' }],
+                subjects: [], mappings: [], weeklyMappings: [], masterPupils: {}, messages: []
+            }
+        };
 
-    const pRes = await fetch(`${SUPABASE_URL}/uba_persistence`, {
-      method: 'POST',
-      headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify({
-          id: persistenceId,
-          hub_id: schoolData.hubId,
-          payload: initialPayload
-      })
-    });
-
-    if (!pRes.ok) throw new Error('Persistence Shard Initialization Failed');
+        await fetch(`${SUPABASE_URL}/uba_persistence`, {
+          method: 'POST',
+          headers: { ...headers, 'Prefer': 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+              id: persistenceId,
+              hub_id: schoolData.hubId,
+              payload: initialPayload,
+              version_tag: 'v9.5.7'
+          })
+        });
+    }
     
     return { success: true };
   }
