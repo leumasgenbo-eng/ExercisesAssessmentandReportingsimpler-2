@@ -86,6 +86,17 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, management: newData }));
   }, []);
 
+  // Contextual Planned Indicators from Broadsheet v9.6.0
+  const plannedIndicators = useMemo(() => {
+    const activeRoadmaps = state.management.weeklyMappings.filter(m => 
+      m.className === activeClass && 
+      m.subject === activeSubject && 
+      m.week === activeWeek
+    );
+    const codes = activeRoadmaps.flatMap(r => r.indicators ? r.indicators.split(',').map(s => s.trim()) : []);
+    return Array.from(new Set(codes)).filter(c => c !== '');
+  }, [state.management.weeklyMappings, activeClass, activeSubject, activeWeek]);
+
   const sendMessage = (text: string, to: 'ADMIN' | 'FACILITATORS') => {
     const newMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -199,6 +210,7 @@ const App: React.FC = () => {
                 ...state.management,
                 settings: { ...state.management.settings, announcement: { id: Date.now().toString(), text, timestamp: new Date().toISOString(), active: true } }
               })}
+              session={session}
             />
           )}
 
@@ -216,7 +228,9 @@ const App: React.FC = () => {
                 type={activeTab} data={activeAssessmentData} 
                 onUpdate={(newData) => setState(prev => ({...prev, [activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork']: {...prev[activeTab === 'CLASS' ? 'classWork' : activeTab === 'HOME' ? 'homeWork' : activeTab === 'PROJECT' ? 'projectWork' : 'criterionWork'], [dataKey]: newData}}))} 
                 selectedExercise={selectedExercise} onExerciseChange={setSelectedExercise}
-                availableIndicators={[]} activeSchoolGroup={activeSchoolGroup} managementData={state.management}
+                availableIndicators={plannedIndicators} 
+                activeSchoolGroup={activeSchoolGroup} 
+                managementData={state.management}
                 isFocusMode={isFocusMode} setIsFocusMode={setIsFocusMode}
                 onYearChange={setActiveYear} onTermChange={setActiveTerm} onMonthChange={setActiveMonth} onWeekChange={setActiveWeek}
                 onTabChange={setActiveTab} onSchoolGroupChange={setActiveSchoolGroup} onClassChange={setActiveClass} onSubjectChange={setActiveSubject}
@@ -293,7 +307,7 @@ const App: React.FC = () => {
         <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v8.2.1 • Secured Session</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v9.6.0 • Secured Session</span>
           </div>
           <div className="flex items-center gap-6">
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>

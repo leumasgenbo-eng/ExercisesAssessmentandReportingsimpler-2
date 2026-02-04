@@ -1,8 +1,8 @@
 -- ==========================================================
--- UNITED BAYLOR ACADEMY: UNIFIED DATA HUB v9.5.8 (Curriculum Sync)
+-- UNITED BAYLOR ACADEMY: UNIFIED DATA HUB v9.6.0 (Clean Schema)
 -- ==========================================================
--- PURPOSE: Structured Curriculum Registry & Granular Assessment Totals.
--- INTEGRATION: Cross-Platform Handshake between Assessment & Companion App.
+-- PURPOSE: Structured Curriculum Registry & Master Access Keys.
+-- INTEGRATION: Formal SuperAdmin Registry within the SQL Partition.
 -- ==========================================================
 
 -- 1. IDENTITY HUB: Primary Authentication Registry
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.uba_identities (
     node_id TEXT NOT NULL,         
     hub_id TEXT NOT NULL,          
     role TEXT NOT NULL,            -- super_admin, school_admin, facilitator, pupil
-    unique_code TEXT UNIQUE,       
+    unique_code TEXT UNIQUE,       -- Master Access Key or Pupil PIN
     merit_balance DOUBLE PRECISION DEFAULT 0 NOT NULL,
     monetary_balance DOUBLE PRECISION DEFAULT 0 NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.uba_mock_scores (
     UNIQUE(hub_id, student_id, mock_series, subject)
 );
 
--- 4. CURRICULUM REGISTRY: Global HQ Syllabus Matrix (NEW v9.5.8)
+-- 4. CURRICULUM REGISTRY: Global HQ Syllabus Matrix
 CREATE TABLE IF NOT EXISTS public.uba_curriculum_master (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     level_group TEXT NOT NULL,      -- DAYCARE, KG, LOWER_BASIC, UPPER_BASIC, JHS
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.uba_curriculum_master (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. ASSESSMENT REGISTRY: Purely Class/Home/Project/CRA Summary (NEW v9.5.8)
+-- 5. ASSESSMENT REGISTRY: Purely Class/Home/Project/CRA Summary
 CREATE TABLE IF NOT EXISTS public.uba_assessment_registry (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     student_id TEXT NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS public.uba_persistence (
     id TEXT PRIMARY KEY,           
     hub_id TEXT NOT NULL,                
     payload JSONB NOT NULL,        
-    version_tag TEXT DEFAULT 'v9.5.8',
+    version_tag TEXT DEFAULT 'v9.6.0',
     last_updated TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS public.uba_activity_logs (
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. TRANSACTION LEDGER & MESSAGING
+-- 9. TRANSACTION LEDGER
 CREATE TABLE IF NOT EXISTS public.uba_transaction_ledger (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     identity_email TEXT NOT NULL,
@@ -126,14 +126,11 @@ CREATE TABLE IF NOT EXISTS public.uba_transaction_ledger (
     timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.uba_messages (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    from_node TEXT NOT NULL,
-    to_node TEXT NOT NULL,
-    message_body TEXT NOT NULL,
-    is_read BOOLEAN DEFAULT FALSE,
-    dispatch_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- 10. BOOTSTRAP: HQ Master Identity
+-- This record provides the global SuperAdmin access key directly within the registry.
+INSERT INTO public.uba_identities (email, full_name, node_id, hub_id, role, unique_code)
+VALUES ('hq@unitedbaylor.edu.gh', 'HQ CONTROLLER', 'HQ-MASTER-NODE', 'UBA-HQ-HUB', 'super_admin', 'UBA-HQ-MASTER-2025')
+ON CONFLICT (email) DO UPDATE SET unique_code = 'UBA-HQ-MASTER-2025';
 
 -- SECURITY OVERRIDES
 ALTER TABLE public.uba_identities DISABLE ROW LEVEL SECURITY;
@@ -145,7 +142,6 @@ ALTER TABLE public.uba_pupils DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uba_persistence DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uba_activity_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uba_transaction_ledger DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.uba_messages DISABLE ROW LEVEL SECURITY;
 
 -- INDEXING
 CREATE INDEX IF NOT EXISTS idx_curr_lvl_sub ON public.uba_curriculum_master(level_group, subject);
