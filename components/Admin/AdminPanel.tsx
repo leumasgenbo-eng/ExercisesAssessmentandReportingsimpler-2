@@ -16,6 +16,16 @@ interface AdminPanelProps {
 const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
 
+// Mapping user-facing categories to internal SchoolGroup keys for subject lookup
+const CATEGORY_TO_GROUP: Record<string, SchoolGroup> = {
+  "BASIC 7-9": "JHS",
+  "BASIC 4-6": "UPPER_BASIC",
+  "BASIC 1-3": "LOWER_BASIC",
+  "SECTION A, B": "LOWER_BASIC", // Defaulting to lower for general sections
+  "KINDERGARTEN 1, 2": "KINDERGARTEN",
+  "NURSERY 1, 2": "DAYCARE"
+};
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   data, fullState, onUpdateManagement, onResetSystem, onRestoreSystem
 }) => {
@@ -44,7 +54,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // --- STAFF COMMANDS ---
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL' as FacilitatorCategory, discipline: '' });
+  const [newStaff, setNewStaff] = useState({ 
+    name: '', 
+    email: '', 
+    displayCategory: 'BASIC 1-3',
+    selectedDisciplines: [] as string[]
+  });
+
+  const availableSubjectsForNewStaff = useMemo(() => {
+    const group = CATEGORY_TO_GROUP[newStaff.displayCategory];
+    return SUBJECTS_BY_GROUP[group] || [];
+  }, [newStaff.displayCategory]);
+
+  const toggleDiscipline = (sub: string) => {
+    setNewStaff(prev => ({
+      ...prev,
+      selectedDisciplines: prev.selectedDisciplines.includes(sub)
+        ? prev.selectedDisciplines.filter(s => s !== sub)
+        : [...prev.selectedDisciplines, sub]
+    }));
+  };
 
   const addStaff = async () => {
     if (!newStaff.name || !newStaff.email) {
@@ -53,14 +82,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     setIsProvisioning(true);
     const pin = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Map display category to internal enum
+    let internalCat: FacilitatorCategory = 'BASIC_SUBJECT_LEVEL';
+    if (newStaff.displayCategory.includes("7-9")) internalCat = 'JHS_SPECIALIST';
+    if (newStaff.displayCategory.includes("KINDERGARTEN")) internalCat = 'KG_FACILITATOR';
+    if (newStaff.displayCategory.includes("NURSERY")) internalCat = 'DAYCARE_FACILITATOR';
+
     const staffObj: Staff = { 
       id: newStaff.email.toLowerCase(), 
       name: newStaff.name.toUpperCase(), 
       email: newStaff.email.toLowerCase(), 
       role: 'facilitator', 
-      category: newStaff.category, 
+      category: internalCat, 
       uniqueCode: pin,
-      primaryDiscipline: newStaff.discipline
+      primaryDiscipline: newStaff.selectedDisciplines.join(', ')
     };
 
     try {
@@ -72,7 +108,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         originGate: 'FACILITATOR' 
       });
       onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
-      setNewStaff({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL', discipline: '' });
+      setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] });
       alert(`Facilitator Linked Successfully.\nPIN: ${pin}`);
     } catch (e) { 
       alert("Cloud Handshake Failed. Identity stored locally."); 
@@ -92,7 +128,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  // Fix: Added missing removeMapping function
   const removeMapping = (id: string) => {
     onUpdateManagement({
       ...data,
@@ -100,7 +135,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  // Fix: Added missing handleMassPromotion function
   const handleMassPromotion = () => {
     if (!confirm("CRITICAL: Promote all pupils to the next academic level? This action modifies the master registry.")) return;
     
@@ -122,7 +156,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     alert("Promotion cycle executed.");
   };
 
-  // Fix: Added missing handleAssignDuties function
   const handleAssignDuties = () => {
     if (!activeMappingStaff) return;
     const newMappings: FacilitatorSubjectMapping[] = Object.entries(tempAssignments)
@@ -146,9 +179,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setActiveMappingStaff(null);
     setTempAssignments({});
   };
-
-  // --- TIMETABLE LOGIC ---
-  const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
 
   const handleUpdateSchedule = (day: string, period: number, className: string, subject: string) => {
     if (!activeTimetableStaff) return;
@@ -176,6 +206,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     link.download = `Staff_Import_Template.csv`;
     link.click();
   };
+
+  const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
 
   return (
     <div className="animate-in space-y-10 pb-24 max-w-[1400px] mx-auto px-4 lg:px-0">
@@ -215,7 +247,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {activeTab === 'STAFF' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-4">
-           {/* Sub-navigation for STAFF */}
            <div className="flex justify-center no-print">
               <div className="bg-white p-2 rounded-full border border-slate-200 shadow-xl flex gap-1">
                  {[
@@ -253,17 +284,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                       <div className="space-y-1">
                          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Academic Category</label>
-                         <select className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black text-xs uppercase appearance-none" value={newStaff.category} onChange={(e) => setNewStaff({...newStaff, category: e.target.value as any})}>
-                            <option value="BASIC_SUBJECT_LEVEL">Basic Subject Level</option>
-                            <option value="JHS_SPECIALIST">JHS Specialist</option>
-                            <option value="KG_FACILITATOR">KG Facilitator</option>
-                            <option value="DAYCARE_FACILITATOR">Daycare Facilitator</option>
+                         <select 
+                            className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black text-xs uppercase appearance-none cursor-pointer focus:border-indigo-600" 
+                            value={newStaff.displayCategory} 
+                            onChange={(e) => setNewStaff({...newStaff, displayCategory: e.target.value, selectedDisciplines: []})}
+                          >
+                            <option value="BASIC 7-9">Basic 7-9</option>
+                            <option value="BASIC 4-6">BASIC 4-6</option>
+                            <option value="BASIC 1-3">BASIC 1-3</option>
+                            <option value="SECTION A, B">SECTION A, B</option>
+                            <option value="KINDERGARTEN 1, 2">KINDERGARTEN 1, 2</option>
+                            <option value="NURSERY 1, 2">NURSERY 1, 2</option>
                          </select>
                       </div>
-                      <div className="space-y-1">
-                         <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Primary Discipline</label>
-                         <input className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black uppercase text-xs focus:border-indigo-600 transition-all" placeholder="ASSIGN SUBJECT..." value={newStaff.discipline} onChange={(e) => setNewStaff({...newStaff, discipline: e.target.value})} />
+
+                      <div className="space-y-3 bg-slate-50 p-6 rounded-[1.5rem] border-2 border-slate-100 shadow-inner max-h-[300px] overflow-y-auto">
+                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Primary Discipline Assignment</label>
+                         <div className="grid grid-cols-1 gap-2">
+                            {availableSubjectsForNewStaff.map(sub => (
+                              <label key={sub} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer group ${newStaff.selectedDisciplines.includes(sub) ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-transparent text-slate-500 hover:bg-white hover:border-slate-200'}`}>
+                                <input type="checkbox" className="hidden" checked={newStaff.selectedDisciplines.includes(sub)} onChange={() => toggleDiscipline(sub)} />
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${newStaff.selectedDisciplines.includes(sub) ? 'bg-white border-white' : 'border-slate-300'}`}>{newStaff.selectedDisciplines.includes(sub) && <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
+                                <span className="text-[10px] font-black uppercase tracking-tight leading-none">{sub}</span>
+                              </label>
+                            ))}
+                         </div>
                       </div>
+
                       <button onClick={addStaff} disabled={isProvisioning} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
                          {isProvisioning ? 'PROVISIONING...' : 'Execute faculty Handshake'}
                       </button>
