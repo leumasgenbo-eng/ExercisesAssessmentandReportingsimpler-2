@@ -21,7 +21,7 @@ const CATEGORY_TO_GROUP: Record<string, SchoolGroup> = {
   "BASIC 7-9": "JHS",
   "BASIC 4-6": "UPPER_BASIC",
   "BASIC 1-3": "LOWER_BASIC",
-  "SECTION A, B": "LOWER_BASIC", // Defaulting to lower for general sections
+  "SECTION A, B": "LOWER_BASIC",
   "KINDERGARTEN 1, 2": "KINDERGARTEN",
   "NURSERY 1, 2": "DAYCARE"
 };
@@ -41,6 +41,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeMappingStaff, setActiveMappingStaff] = useState<Staff | null>(null);
   const [targetClass, setTargetClass] = useState('Basic 1A');
   const [tempAssignments, setTempAssignments] = useState<Record<string, boolean>>({});
+
+  // Editing State
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
   const totalPupils = useMemo(() => (Object.values(data?.masterPupils || {}) as MasterPupilEntry[][]).reduce((a, c) => a + (c?.length || 0), 0), [data?.masterPupils]);
 
@@ -81,16 +84,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       return;
     }
     setIsProvisioning(true);
-    const pin = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Map display category to internal enum
+    // Use existing uniqueCode if editing, else generate new
+    const existing = data.staff.find(s => s.id === editingStaffId);
+    const pin = existing?.uniqueCode || Math.floor(100000 + Math.random() * 900000).toString();
+    
     let internalCat: FacilitatorCategory = 'BASIC_SUBJECT_LEVEL';
     if (newStaff.displayCategory.includes("7-9")) internalCat = 'JHS_SPECIALIST';
     if (newStaff.displayCategory.includes("KINDERGARTEN")) internalCat = 'KG_FACILITATOR';
     if (newStaff.displayCategory.includes("NURSERY")) internalCat = 'DAYCARE_FACILITATOR';
 
     const staffObj: Staff = { 
-      id: newStaff.email.toLowerCase(), 
+      id: editingStaffId || newStaff.email.toLowerCase(), 
       name: newStaff.name.toUpperCase(), 
       email: newStaff.email.toLowerCase(), 
       role: 'facilitator', 
@@ -107,12 +112,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         hubId: data.settings.hubId, 
         originGate: 'FACILITATOR' 
       });
-      onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
+      
+      const filteredStaff = (data.staff || []).filter(s => s.id !== staffObj.id);
+      onUpdateManagement({ ...data, staff: [...filteredStaff, staffObj] });
+      
       setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] });
-      alert(`Facilitator Linked Successfully.\nPIN: ${pin}`);
+      setEditingStaffId(null);
+      alert(editingStaffId ? "Identity Updated." : `Facilitator Linked Successfully.\nPIN: ${pin}`);
     } catch (e) { 
       alert("Cloud Handshake Failed. Identity stored locally."); 
-      onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
+      const filteredStaff = (data.staff || []).filter(s => s.id !== staffObj.id);
+      onUpdateManagement({ ...data, staff: [...filteredStaff, staffObj] });
     } finally { 
       setIsProvisioning(false); 
     }
@@ -126,6 +136,39 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       mappings: (data.mappings || []).filter(m => m.staffId !== id),
       schedules: (data.schedules || []).filter(s => s.staffId !== id)
     });
+  };
+
+  const editStaff = (staff: Staff) => {
+    setEditingStaffId(staff.id);
+    setNewStaff({
+      name: staff.name,
+      email: staff.email,
+      displayCategory: Object.keys(CATEGORY_TO_GROUP).find(k => {
+          if (k.includes("7-9") && staff.category === 'JHS_SPECIALIST') return true;
+          if (k.includes("KINDERGARTEN") && staff.category === 'KG_FACILITATOR') return true;
+          if (k.includes("NURSERY") && staff.category === 'DAYCARE_FACILITATOR') return true;
+          return false;
+      }) || "BASIC 1-3",
+      selectedDisciplines: staff.primaryDiscipline ? staff.primaryDiscipline.split(', ') : []
+    });
+    setStaffSubTab('ENROLL');
+  };
+
+  const downloadCredentialsAsTxt = (staff: Staff) => {
+    const content = `UNITED BAYLOR ACADEMY\nNODE ACCESS KEYCARD\n============================\nLegal Identity: ${staff.name}\nOfficial Email: ${staff.email}\nInstitution: ${data.settings.name}\nNode ID: ${data.settings.institutionalId}\nHub ID: ${data.settings.hubId}\n\nSECRET ACCESS PIN: ${staff.uniqueCode}\n============================\nPROTOCOL: Use these credentials at the Identity Gateway to access your academic terminal. Keep this card confidential.`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Access_Card_${staff.name.replace(/\s+/g, '_')}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const forwardCredentials = (staff: Staff) => {
+    const subject = encodeURIComponent(`Access Credentials: ${data.settings.name} Academic Node`);
+    const body = encodeURIComponent(`Hello ${staff.name},\n\nYour academic node access for ${data.settings.name} has been provisioned.\n\nNODE ID: ${data.settings.institutionalId}\nHUB ID: ${data.settings.hubId}\nSECRET PIN: ${staff.uniqueCode}\n\nPlease enter these details at the Identity Gateway to start your session.`);
+    window.location.href = `mailto:${staff.email}?subject=${subject}&body=${body}`;
   };
 
   const removeMapping = (id: string) => {
@@ -180,6 +223,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setTempAssignments({});
   };
 
+  // --- TIMETABLE LOGIC ---
+  const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
+
   const handleUpdateSchedule = (day: string, period: number, className: string, subject: string) => {
     if (!activeTimetableStaff) return;
     const currentSchedules = data.schedules || [];
@@ -206,8 +252,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     link.download = `Staff_Import_Template.csv`;
     link.click();
   };
-
-  const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
 
   return (
     <div className="animate-in space-y-10 pb-24 max-w-[1400px] mx-auto px-4 lg:px-0">
@@ -269,10 +313,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
            {staffSubTab === 'ENROLL' && (
              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-5 bg-white rounded-[3rem] p-10 shadow-xl border-4 border-slate-900 h-fit">
-                   <h4 className="text-2xl font-black uppercase mb-8 tracking-tighter flex items-center gap-4">
-                     <span className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg">⚡</span>
-                     Direct Enrollment
-                   </h4>
+                   <div className="flex justify-between items-start mb-8">
+                      <h4 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-4">
+                        <span className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg">{editingStaffId ? '✏️' : '⚡'}</span>
+                        {editingStaffId ? 'Update Faculty' : 'Direct Enrollment'}
+                      </h4>
+                      {editingStaffId && (
+                        <button onClick={() => { setEditingStaffId(null); setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] }); }} className="text-rose-500 font-black text-[10px] uppercase underline">Cancel Edit</button>
+                      )}
+                   </div>
                    <div className="space-y-6">
                       <div className="space-y-1">
                          <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Legal Identity</label>
@@ -312,7 +361,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
 
                       <button onClick={addStaff} disabled={isProvisioning} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
-                         {isProvisioning ? 'PROVISIONING...' : 'Execute faculty Handshake'}
+                         {isProvisioning ? 'PROVISIONING...' : (editingStaffId ? 'Confirm Identity Update' : 'Execute faculty Handshake')}
                       </button>
                    </div>
                 </div>
@@ -336,10 +385,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                               <div className="w-14 h-14 bg-slate-950 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-lg">{s.name.charAt(0)}</div>
                               <div>
                                  <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{s.name}</div>
-                                 <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{s.primaryDiscipline || 'Generalist'} • <span className="text-indigo-600">{s.uniqueCode}</span></div>
+                                 <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                   {s.primaryDiscipline || 'Generalist'} • <span className="text-indigo-600 font-black">{s.uniqueCode}</span>
+                                 </div>
                               </div>
                            </div>
-                           <button onClick={() => removeStaff(s.id)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100 transition-all opacity-0 group-hover:opacity-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                           <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                              <button onClick={() => downloadCredentialsAsTxt(s)} title="Download Access Card" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-emerald-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
+                              <button onClick={() => forwardCredentials(s)} title="Forward via Email" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-sky-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></button>
+                              <button onClick={() => editStaff(s)} title="Edit Record" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                              <button onClick={() => removeStaff(s.id)} title="Delete Facilitator" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                           </div>
                         </div>
                       ))}
                    </div>
@@ -349,7 +405,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
            {staffSubTab === 'MATRIX' && (
              <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100">
-                <h4 className="text-3xl font-black uppercase mb-10 tracking-tight">Duty Allocation Matrix</h4>
+                <div className="flex justify-between items-end mb-10 border-b-4 border-slate-50 pb-8">
+                  <div>
+                    <h4 className="text-3xl font-black uppercase tracking-tight">Duty Allocation Matrix</h4>
+                    <p className="text-indigo-500 font-black text-[10px] uppercase tracking-widest mt-1">Program Subject Specialists or Class Teachers</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                    {(data.staff || []).map(s => (
                      <div key={s.id} className="bg-slate-50 p-8 rounded-[3rem] border-2 border-transparent hover:border-indigo-100 transition-all relative overflow-hidden group">
