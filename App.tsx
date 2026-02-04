@@ -101,7 +101,7 @@ const App: React.FC = () => {
       projectWork: {}, 
       criterionWork: {}, 
       bookCountRecords: {},
-      management: { ...INITIAL_MANAGEMENT_DATA, messages: [] } 
+      management: { ...INITIAL_MANAGEMENT_DATA, messages: [], specialNeedsRegistry: [], specialNeedsAudits: [] } 
     };
   });
 
@@ -382,7 +382,7 @@ const App: React.FC = () => {
         <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v9.6.1 • Secured Session</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v9.6.2 • Secured Session</span>
           </div>
           <div className="flex items-center gap-6">
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>
