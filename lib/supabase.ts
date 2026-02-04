@@ -9,14 +9,10 @@ const headers = {
 };
 
 export const SupabaseSync = {
-  /**
-   * v9.5.7 Handshake Protocol: Verify Identity and link Facilitator Detail if available.
-   */
   async verifyIdentity(fullName: string, nodeId: string) {
     const cleanName = fullName.trim();
     const cleanNode = nodeId.trim();
     
-    // 1. Fetch from core Identity Hub
     const query = `full_name=ilike.${encodeURIComponent(cleanName)}&node_id=ilike.${encodeURIComponent(cleanNode)}&select=*`;
     const res = await fetch(`${SUPABASE_URL}/uba_identities?${query}`, { headers });
     
@@ -30,7 +26,6 @@ export const SupabaseSync = {
     const identity = data[0] || null;
 
     if (identity && identity.role === 'facilitator') {
-      // 2. Supplement with Facilitator Registry details
       const facRes = await fetch(`${SUPABASE_URL}/uba_facilitators?email=eq.${identity.email}&select=*`, { headers });
       if (facRes.ok) {
         const facData = await facRes.json();
@@ -44,7 +39,6 @@ export const SupabaseSync = {
   },
 
   async fetchStaff(hubId: string) {
-    // Returns full staff matrix including facilitator details
     const res = await fetch(`${SUPABASE_URL}/uba_facilitators?hub_id=eq.${hubId}&select=*`, { headers });
     if (!res.ok) throw new Error('Cloud Staff Registry Fetch Failed');
     return res.json();
@@ -56,9 +50,6 @@ export const SupabaseSync = {
     return res.json();
   },
 
-  /**
-   * Retrieves the institutional state blob (Persistence Shard) v9.5.7
-   */
   async fetchPersistence(nodeId: string, hubId: string) {
     const persistenceId = `daily_activity_${hubId}_${nodeId}`;
     const res = await fetch(`${SUPABASE_URL}/uba_persistence?id=eq.${persistenceId}&select=payload`, { headers });
@@ -67,15 +58,12 @@ export const SupabaseSync = {
     return data[0]?.payload || null;
   },
 
-  /**
-   * Pushes the full app state to the cloud shard with v9.5.7 version tag
-   */
   async pushGlobalState(nodeId: string, hubId: string, fullState: any) {
     const payload = {
       id: `daily_activity_${hubId}_${nodeId}`, 
       hub_id: hubId,
       payload: fullState,
-      version_tag: 'v9.5.7',
+      version_tag: 'v9.6.0',
       last_updated: new Date().toISOString()
     };
     
@@ -92,9 +80,6 @@ export const SupabaseSync = {
     return res.json();
   },
 
-  /**
-   * v9.5.7 Provisioning: Dual registration in Identity Hub and Facilitator Registry
-   */
   async registerSchool(schoolData: { 
     name: string, 
     nodeId: string, 
@@ -103,7 +88,6 @@ export const SupabaseSync = {
     hubId: string,
     originGate: string 
   }) {
-    // 1. Provision Identity
     const identityPayload = {
       email: schoolData.email.trim().toLowerCase(),
       full_name: schoolData.name.trim().toUpperCase(),
@@ -122,7 +106,6 @@ export const SupabaseSync = {
 
     if (!idRes.ok) throw new Error('Identity Creation Failed');
 
-    // 2. Provision Facilitator record if applicable
     if (schoolData.originGate === 'FACILITATOR') {
       const facPayload = {
         email: schoolData.email.trim().toLowerCase(),
@@ -140,7 +123,6 @@ export const SupabaseSync = {
       });
     }
 
-    // 3. Initialize Persistence for Admins
     if (schoolData.originGate === 'ADMIN') {
         const persistenceId = `daily_activity_${schoolData.hubId}_${schoolData.nodeId}`;
         const initialPayload = {
@@ -155,7 +137,12 @@ export const SupabaseSync = {
                     complianceThreshold: 0.85, poorPerformanceThreshold: 10, poorPerformanceFrequency: 3
                 },
                 staff: [{ id: schoolData.email, name: schoolData.name.toUpperCase(), role: 'school_admin', email: schoolData.email, uniqueCode: 'ADMIN-PIN' }],
-                subjects: [], mappings: [], weeklyMappings: [], masterPupils: {}, messages: []
+                subjects: [], 
+                mappings: [], 
+                weeklyMappings: [], 
+                curriculum: [], // Mandatory v9.6.0
+                masterPupils: {}, 
+                messages: [] // Mandatory v9.6.0
             }
         };
 
@@ -166,7 +153,7 @@ export const SupabaseSync = {
               id: persistenceId,
               hub_id: schoolData.hubId,
               payload: initialPayload,
-              version_tag: 'v9.5.7'
+              version_tag: 'v9.6.0'
           })
         });
     }

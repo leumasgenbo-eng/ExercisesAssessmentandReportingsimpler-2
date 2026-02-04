@@ -34,7 +34,6 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regSlogan, setRegSlogan] = useState('');
 
-  // Stashed state to hold cloud data after download but before app entry
   const [stashedSession, setStashedSession] = useState<UserSession | null>(null);
   const [stashedState, setStashedState] = useState<AppState | null>(null);
 
@@ -43,36 +42,39 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
     setSyncStatus('Linking...');
     
     try {
-      // 1. Download the Institutional AppState Shard (100% Data Capture)
       setSyncStatus(`Syncing Node: ${session.nodeId}...`);
       const hydratedPayload = await SupabaseSync.fetchPersistence(session.nodeId, session.hubId || 'SMA-HQ');
       
-      // 2. Download the Global Pupil Roster for this Hub
       setSyncStatus('Updating Roster Matrix...');
       const remotePupils = await SupabaseSync.fetchPupils(session.hubId || 'SMA-HQ');
       
       const master: Record<string, MasterPupilEntry[]> = {};
-      remotePupils.forEach((p: any) => {
-        if (!master[p.class_name]) master[p.class_name] = [];
-        master[p.class_name].push({ 
-          name: p.name, 
-          gender: p.gender as any, 
-          studentId: p.student_id, 
-          isJhsLevel: !!p.is_jhs_level 
-        });
-      });
+      if (Array.isArray(remotePupils)) {
+          remotePupils.forEach((p: any) => {
+            if (!master[p.class_name]) master[p.class_name] = [];
+            master[p.class_name].push({ 
+              name: p.name, 
+              gender: p.gender as any, 
+              studentId: p.student_id, 
+              isJhsLevel: !!p.is_jhs_level 
+            });
+          });
+      }
 
-      // Prepare the final state for the app
       let finalState: AppState | null = hydratedPayload;
       if (finalState && finalState.management) {
         finalState.management.masterPupils = master;
+        // v9.6.0 Fix: Ensure critical management arrays exist
+        if (!finalState.management.weeklyMappings) finalState.management.weeklyMappings = [];
+        if (!finalState.management.staff) finalState.management.staff = [];
+        if (!finalState.management.mappings) finalState.management.mappings = [];
+        if (!finalState.management.curriculum) finalState.management.curriculum = [];
       }
 
       setSyncStatus('Authorized.');
       setStashedSession(session);
       setStashedState(finalState);
       
-      // Auto-advance for super admin, or show success screen for local nodes
       if (session.role === 'super_admin') {
         onAuthenticate(session, finalState || undefined);
       } else {
@@ -137,7 +139,6 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
             return;
         }
         
-        // v9.5.7: Pulling detailed facilitator info if available
         const facDetail = identity.facilitator_detail || {};
         
         initiateHandshake({
@@ -171,7 +172,7 @@ const IdentityGateway: React.FC<IdentityGatewayProps> = ({
                <div className="text-center">
                   <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 shadow-xl">🏛️</div>
                   <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none mb-1">Institutional Gateway</h2>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Access Protocol v9.5.7</p>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">Access Protocol v9.6.0</p>
                </div>
 
                <div className="grid grid-cols-1 gap-2.5">

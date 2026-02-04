@@ -16,8 +16,8 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   data, fullState, onUpdateManagement, onResetSystem, onRestoreSystem
 }) => {
-  const pupilImportRef = useRef<HTMLInputElement>(null);
   const staffImportRef = useRef<HTMLInputElement>(null);
+  const pupilImportRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'IDENTITY' | 'STAFF' | 'PUPILS' | 'REWARDS' | 'ARCHIVE'>('IDENTITY');
   const [registryClass, setRegistryClass] = useState('Basic 1A');
@@ -28,10 +28,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [targetClass, setTargetClass] = useState('Basic 1A');
   const [tempAssignments, setTempAssignments] = useState<Record<string, boolean>>({});
 
-  // Individual Pupil Edit State
-  const [editingPupil, setEditingPupil] = useState<{ entry: MasterPupilEntry; oldClass: string } | null>(null);
-
-  const totalPupils = useMemo(() => Object.values(data.masterPupils || {}).reduce((a, c) => a + (c?.length || 0), 0), [data.masterPupils]);
+  // Fix: Explicitly cast values to MasterPupilEntry[][] to prevent 'unknown' inference error at line 31
+  const totalPupils = useMemo(() => (Object.values(data?.masterPupils || {}) as MasterPupilEntry[][]).reduce((a, c) => a + (c?.length || 0), 0), [data?.masterPupils]);
 
   const handleUpdateSetting = (field: string, value: any) => onUpdateManagement({ ...data, settings: { ...data.settings, [field]: value } });
 
@@ -69,12 +67,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         hubId: data.settings.hubId, 
         originGate: 'FACILITATOR' 
       });
-      onUpdateManagement({ ...data, staff: [...data.staff, staffObj] });
+      onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
       setNewStaff({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL' });
       alert(`Facilitator Linked Successfully.\nPIN: ${pin}`);
     } catch (e) { 
       alert("Cloud Handshake Failed. Identity stored locally."); 
-      onUpdateManagement({ ...data, staff: [...data.staff, staffObj] });
+      onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
     } finally { 
       setIsProvisioning(false); 
     }
@@ -84,15 +82,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!confirm("CRITICAL: Permanently disconnect this facilitator and wipe all their academic duty mappings?")) return;
     onUpdateManagement({ 
       ...data, 
-      staff: data.staff.filter(s => s.id !== id), 
-      mappings: data.mappings.filter(m => m.staffId !== id) 
+      staff: (data.staff || []).filter(s => s.id !== id), 
+      mappings: (data.mappings || []).filter(m => m.staffId !== id) 
     });
   };
 
   const removeMapping = (mappingId: string) => {
     onUpdateManagement({
       ...data,
-      mappings: data.mappings.filter(m => m.id !== mappingId)
+      mappings: (data.mappings || []).filter(m => m.id !== mappingId)
     });
   };
 
@@ -112,8 +110,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         };
       });
     
-    // Prevent duplicate mappings
-    const existingMappings = data.mappings;
+    const existingMappings = data.mappings || [];
     const filteredNew = newMappings.filter(nm => 
       !existingMappings.some(em => em.staffId === nm.staffId && em.className === nm.className && em.subjectId === nm.subjectId)
     );
@@ -128,7 +125,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!confirm("CRITICAL WARNING: Effect School-Wide Mass Promotion?\nAll students will move to the next academic level. This cannot be undone.")) return;
     const newMaster: Record<string, MasterPupilEntry[]> = {};
     const flatClasses = Object.values(SCHOOL_HIERARCHY).flatMap(g => g.classes);
-    Object.entries(data.masterPupils || {}).forEach(([cls, pupils]) => {
+    // Fix: Explicitly cast entries to [string, MasterPupilEntry[]][] to prevent 'unknown' spread error during iteration
+    (Object.entries(data.masterPupils || {}) as [string, MasterPupilEntry[]][]).forEach(([cls, pupils]) => {
       const nextIdx = flatClasses.indexOf(cls) + 1;
       const nextCls = flatClasses[nextIdx];
       if (nextCls) newMaster[nextCls] = [...(newMaster[nextCls] || []), ...pupils];
@@ -163,11 +161,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               <div className="space-y-3">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Academic Institution Name</label>
-                 <input className="w-full bg-slate-50 border-4 border-slate-100 p-6 rounded-3xl font-black uppercase text-sm outline-none focus:border-indigo-600 transition-all" value={data.settings.name} onChange={(e) => handleUpdateSetting('name', e.target.value)} />
+                 <input className="w-full bg-slate-50 border-4 border-slate-100 p-6 rounded-3xl font-black uppercase text-sm outline-none focus:border-indigo-600 transition-all" value={data.settings?.name || ''} onChange={(e) => handleUpdateSetting('name', e.target.value)} />
               </div>
               <div className="space-y-3">
                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Secure Shard Node ID</label>
-                 <input className="w-full bg-indigo-50 border-4 border-indigo-100 p-6 rounded-3xl font-black text-indigo-600 text-sm outline-none" value={data.settings.institutionalId} onChange={(e) => handleUpdateSetting('institutionalId', e.target.value)} />
+                 <input className="w-full bg-indigo-50 border-4 border-indigo-100 p-6 rounded-3xl font-black text-indigo-600 text-sm outline-none" value={data.settings?.institutionalId || ''} onChange={(e) => handleUpdateSetting('institutionalId', e.target.value)} />
               </div>
            </div>
         </div>
@@ -205,13 +203,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="flex justify-between items-center mb-8 border-b-2 border-slate-50 pb-4">
                 <div>
                    <h4 className="text-xl font-black uppercase tracking-tight">Faculty Matrix</h4>
-                   <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{data.staff.length} Managed Identities</p>
+                   <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{(data.staff || []).length} Managed Identities</p>
                 </div>
                 <button onClick={() => staffImportRef.current?.click()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg hover:bg-black transition-all">Import CSV 📥</button>
                 <input type="file" ref={staffImportRef} className="hidden" accept=".csv" />
               </div>
               <div className="grid grid-cols-1 gap-3">
-                 {data.staff.map(s => (
+                 {(data.staff || []).map(s => (
                    <div key={s.id} className="p-5 bg-slate-50 rounded-[2rem] flex items-center justify-between group hover:bg-white hover:border-indigo-200 border-2 border-transparent transition-all shadow-sm">
                       <div className="flex items-center gap-5">
                          <div className="w-12 h-12 bg-slate-950 text-white rounded-2xl flex items-center justify-center font-black text-lg shadow-lg">{s.name.charAt(0)}</div>
@@ -252,7 +250,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
            </div>
 
            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-              {(data.masterPupils?.[registryClass] || []).map((p, i) => (
+              {(data?.masterPupils?.[registryClass] || []).map((p, i) => (
                 <div key={i} className="p-6 bg-white rounded-[2.5rem] border-4 border-slate-50 flex items-center justify-between group hover:border-indigo-100 transition-all shadow-sm">
                    <div className="flex items-center gap-5 truncate">
                       <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-lg shrink-0 shadow-md">{p.name.charAt(0)}</div>
@@ -261,16 +259,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{p.studentId || 'NO ID'}</div>
                       </div>
                    </div>
-                   <button onClick={() => setEditingPupil({ entry: {...p}, oldClass: registryClass })} className="p-3 text-slate-200 hover:text-indigo-600 transition-colors">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                   </button>
                 </div>
               ))}
            </div>
         </div>
       )}
 
-      {/* ACADEMIC DUTY MAPPING MODAL (Micro text size for high density) */}
+      {/* ACADEMIC DUTY MAPPING MODAL */}
       {activeMappingStaff && (
         <div className="fixed inset-0 z-[6000] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl animate-in fade-in">
            <div className="bg-white rounded-[3rem] p-8 md:p-12 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-4 border-slate-900">
@@ -314,7 +309,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                        
                        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-indigo-100 scrollbar-track-transparent">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pb-6">
-                             {SUBJECTS_BY_GROUP[getGroupForClass(targetClass)].map(sub => (
+                             {(SUBJECTS_BY_GROUP[getGroupForClass(targetClass)] || []).map(sub => (
                                <label key={sub} className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer group ${tempAssignments[sub] ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' : 'bg-slate-50 border-transparent text-slate-500 hover:bg-white hover:border-slate-200'}`}>
                                  <input type="checkbox" className="hidden" checked={!!tempAssignments[sub]} onChange={() => setTempAssignments(p => ({...p, [sub]: !p[sub]}))} />
                                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0 ${tempAssignments[sub] ? 'bg-white border-white' : 'border-slate-300'}`}>{tempAssignments[sub] && <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}</div>
@@ -331,14 +326,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     <h5 className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4 shrink-0">Current Node Load</h5>
                     <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
                        <div className="space-y-2">
-                          {data.mappings.filter(m => m.staffId === activeMappingStaff.id).map((m, idx) => (
+                          {(data.mappings || []).filter(m => m.staffId === activeMappingStaff.id).map((m, idx) => (
                              <div key={idx} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center justify-between group/item">
                                 <div className="truncate">
                                    <div className="text-[10px] font-black text-white uppercase truncate">{data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId}</div>
                                    <div className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest">{m.className}</div>
                                 </div>
                                 <button onClick={() => removeMapping(m.id)} className="p-1.5 text-white/20 hover:text-rose-500 transition-colors opacity-0 group-hover/item:opacity-100">
-                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                 </button>
                              </div>
                           ))}

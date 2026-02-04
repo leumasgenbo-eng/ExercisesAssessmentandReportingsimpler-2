@@ -86,16 +86,17 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, management: newData }));
   }, []);
 
-  // Contextual Planned Indicators from Broadsheet v9.6.0
+  // Contextual Planned Indicators v9.6.0 - Added safety spread for weeklyMappings
   const plannedIndicators = useMemo(() => {
-    const activeRoadmaps = state.management.weeklyMappings.filter(m => 
+    const mappings = state.management?.weeklyMappings || [];
+    const activeRoadmaps = mappings.filter(m => 
       m.className === activeClass && 
       m.subject === activeSubject && 
       m.week === activeWeek
     );
     const codes = activeRoadmaps.flatMap(r => r.indicators ? r.indicators.split(',').map(s => s.trim()) : []);
     return Array.from(new Set(codes)).filter(c => c !== '');
-  }, [state.management.weeklyMappings, activeClass, activeSubject, activeWeek]);
+  }, [state.management?.weeklyMappings, activeClass, activeSubject, activeWeek]);
 
   const sendMessage = (text: string, to: 'ADMIN' | 'FACILITATORS') => {
     const newMessage: Message = {
@@ -108,17 +109,19 @@ const App: React.FC = () => {
     };
     updateManagementData({
       ...state.management,
-      messages: [newMessage, ...state.management.messages]
+      messages: [newMessage, ...(state.management.messages || [])]
     });
   };
 
   const handleAuthenticate = (userSession: UserSession, hydratedState?: AppState) => {
     if (hydratedState) {
       setState(hydratedState);
-      const settings = hydratedState.management.settings;
-      setActiveYear(settings.currentYear);
-      setActiveTerm(settings.currentTerm);
-      setActiveMonth(settings.activeMonth);
+      const settings = hydratedState.management?.settings;
+      if (settings) {
+        setActiveYear(settings.currentYear);
+        setActiveTerm(settings.currentTerm);
+        setActiveMonth(settings.activeMonth);
+      }
     }
     setSession(userSession);
   };
@@ -130,7 +133,7 @@ const App: React.FC = () => {
     
     if (!existing) {
       const base = createInitialAssessmentData(activeWeek, activeTab);
-      const masterList = state.management.masterPupils?.[activeClass] || [];
+      const masterList = state.management?.masterPupils?.[activeClass] || [];
       const initialPupils: Pupil[] = masterList.map((m, idx) => ({
         id: `m-${idx}-${Date.now()}`,
         name: m.name,
@@ -243,7 +246,7 @@ const App: React.FC = () => {
           {activeView === 'PUPILS' && (
             <PupilPortal 
               fullState={state} 
-              onUpdateState={(type, key, data) => setState(prev => ({...prev, [type === 'CLASS' ? 'classWork' : 'homeWork']: {...prev[type === 'CLASS' ? 'classWork' : 'homeWork'], [key]: data}}))}
+              onUpdateState={(type, key, data) => setState(prev => ({...prev, [type === 'CLASS' ? 'classWork' : type === 'HOME' ? 'homeWork' : type === 'PROJECT' ? 'projectWork' : 'criterionWork']: {...prev[type === 'CLASS' ? 'classWork' : type === 'HOME' ? 'homeWork' : type === 'PROJECT' ? 'projectWork' : 'criterionWork'], [key]: data}}))}
               isFocusMode={isFocusMode} 
               setIsFocusMode={setIsFocusMode}
               isIndividualOnly={session.role === 'pupil'}
@@ -286,7 +289,7 @@ const App: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                {state.management.messages
+                {(state.management.messages || [])
                   .filter(m => (session.role === 'school_admin' && m.to === 'ADMIN') || (session.role === 'facilitator' && m.to === 'FACILITATORS'))
                   .map(msg => (
                     <div key={msg.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-lg">
