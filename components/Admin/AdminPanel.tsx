@@ -1,5 +1,5 @@
 import React, { useRef, useState, useMemo } from 'react';
-import { ManagementState, AppState, MasterPupilEntry, Staff, FacilitatorCategory, FacilitatorSubjectMapping, SchoolGroup } from '../../types';
+import { ManagementState, AppState, MasterPupilEntry, Staff, FacilitatorCategory, FacilitatorSubjectMapping, SchoolGroup, StaffSchedule, ScheduleSlot } from '../../types';
 import { SCHOOL_HIERARCHY, SUBJECTS_BY_GROUP } from '../../constants';
 import ArchivePortal from './ArchivePortal';
 import FacilitatorRewardPortal from './FacilitatorRewardPortal';
@@ -13,6 +13,9 @@ interface AdminPanelProps {
   onRestoreSystem: (newState: AppState) => void;
 }
 
+const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
   data, fullState, onUpdateManagement, onResetSystem, onRestoreSystem
 }) => {
@@ -20,6 +23,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const pupilImportRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<'IDENTITY' | 'STAFF' | 'PUPILS' | 'REWARDS' | 'ARCHIVE'>('IDENTITY');
+  const [staffSubTab, setStaffSubTab] = useState<'ENROLL' | 'MATRIX' | 'TIMETABLE' | 'SCHEDULE'>('ENROLL');
   const [registryClass, setRegistryClass] = useState('Basic 1A');
   const [isProvisioning, setIsProvisioning] = useState(false);
   
@@ -28,7 +32,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [targetClass, setTargetClass] = useState('Basic 1A');
   const [tempAssignments, setTempAssignments] = useState<Record<string, boolean>>({});
 
-  // Fix: Explicitly cast values to MasterPupilEntry[][] to prevent 'unknown' inference error at line 31
   const totalPupils = useMemo(() => (Object.values(data?.masterPupils || {}) as MasterPupilEntry[][]).reduce((a, c) => a + (c?.length || 0), 0), [data?.masterPupils]);
 
   const handleUpdateSetting = (field: string, value: any) => onUpdateManagement({ ...data, settings: { ...data.settings, [field]: value } });
@@ -41,7 +44,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // --- STAFF COMMANDS ---
-  const [newStaff, setNewStaff] = useState({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL' as FacilitatorCategory });
+  const [newStaff, setNewStaff] = useState({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL' as FacilitatorCategory, discipline: '' });
 
   const addStaff = async () => {
     if (!newStaff.name || !newStaff.email) {
@@ -56,7 +59,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       email: newStaff.email.toLowerCase(), 
       role: 'facilitator', 
       category: newStaff.category, 
-      uniqueCode: pin 
+      uniqueCode: pin,
+      primaryDiscipline: newStaff.discipline
     };
 
     try {
@@ -68,7 +72,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         originGate: 'FACILITATOR' 
       });
       onUpdateManagement({ ...data, staff: [...(data.staff || []), staffObj] });
-      setNewStaff({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL' });
+      setNewStaff({ name: '', email: '', category: 'BASIC_SUBJECT_LEVEL', discipline: '' });
       alert(`Facilitator Linked Successfully.\nPIN: ${pin}`);
     } catch (e) { 
       alert("Cloud Handshake Failed. Identity stored locally."); 
@@ -83,17 +87,42 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     onUpdateManagement({ 
       ...data, 
       staff: (data.staff || []).filter(s => s.id !== id), 
-      mappings: (data.mappings || []).filter(m => m.staffId !== id) 
+      mappings: (data.mappings || []).filter(m => m.staffId !== id),
+      schedules: (data.schedules || []).filter(s => s.staffId !== id)
     });
   };
 
-  const removeMapping = (mappingId: string) => {
+  // Fix: Added missing removeMapping function
+  const removeMapping = (id: string) => {
     onUpdateManagement({
       ...data,
-      mappings: (data.mappings || []).filter(m => m.id !== mappingId)
+      mappings: (data.mappings || []).filter(m => m.id !== id)
     });
   };
 
+  // Fix: Added missing handleMassPromotion function
+  const handleMassPromotion = () => {
+    if (!confirm("CRITICAL: Promote all pupils to the next academic level? This action modifies the master registry.")) return;
+    
+    const newMasterPupils: Record<string, MasterPupilEntry[]> = {};
+    const groups = Object.keys(SCHOOL_HIERARCHY) as SchoolGroup[];
+    const orderedClasses = groups.flatMap(g => SCHOOL_HIERARCHY[g].classes);
+    
+    orderedClasses.forEach((cls, idx) => {
+      const pupils = data.masterPupils[cls] || [];
+      if (pupils.length === 0) return;
+      
+      const nextClass = orderedClasses[idx + 1];
+      if (nextClass) {
+        newMasterPupils[nextClass] = [...(newMasterPupils[nextClass] || []), ...pupils];
+      }
+    });
+
+    onUpdateManagement({ ...data, masterPupils: newMasterPupils });
+    alert("Promotion cycle executed.");
+  };
+
+  // Fix: Added missing handleAssignDuties function
   const handleAssignDuties = () => {
     if (!activeMappingStaff) return;
     const newMappings: FacilitatorSubjectMapping[] = Object.entries(tempAssignments)
@@ -105,34 +134,47 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           staffId: activeMappingStaff.id,
           className: targetClass,
           subjectId: subId,
-          type: 'CLASS_BASED',
+          type: 'SUBJECT_BASED',
           employmentType: 'FULL_TIME'
         };
       });
-    
-    const existingMappings = data.mappings || [];
-    const filteredNew = newMappings.filter(nm => 
-      !existingMappings.some(em => em.staffId === nm.staffId && em.className === nm.className && em.subjectId === nm.subjectId)
-    );
 
-    onUpdateManagement({ ...data, mappings: [...existingMappings, ...filteredNew] });
+    onUpdateManagement({
+      ...data,
+      mappings: [...(data.mappings || []), ...newMappings]
+    });
     setActiveMappingStaff(null);
     setTempAssignments({});
-    alert("Academic Matrix Updated.");
   };
 
-  const handleMassPromotion = () => {
-    if (!confirm("CRITICAL WARNING: Effect School-Wide Mass Promotion?\nAll students will move to the next academic level. This cannot be undone.")) return;
-    const newMaster: Record<string, MasterPupilEntry[]> = {};
-    const flatClasses = Object.values(SCHOOL_HIERARCHY).flatMap(g => g.classes);
-    // Fix: Explicitly cast entries to [string, MasterPupilEntry[]][] to prevent 'unknown' spread error during iteration
-    (Object.entries(data.masterPupils || {}) as [string, MasterPupilEntry[]][]).forEach(([cls, pupils]) => {
-      const nextIdx = flatClasses.indexOf(cls) + 1;
-      const nextCls = flatClasses[nextIdx];
-      if (nextCls) newMaster[nextCls] = [...(newMaster[nextCls] || []), ...pupils];
-    });
-    onUpdateManagement({ ...data, masterPupils: newMaster });
-    alert("Promotion Cycle Finalized.");
+  // --- TIMETABLE LOGIC ---
+  const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
+
+  const handleUpdateSchedule = (day: string, period: number, className: string, subject: string) => {
+    if (!activeTimetableStaff) return;
+    const currentSchedules = data.schedules || [];
+    const staffSched = currentSchedules.find(s => s.staffId === activeTimetableStaff) || { staffId: activeTimetableStaff, slots: [] };
+    
+    const newSlots = staffSched.slots.filter(s => !(s.day === day && s.period === period));
+    if (className && subject) {
+      newSlots.push({ day, period, className, subject });
+    }
+
+    const updatedSchedules = currentSchedules.filter(s => s.staffId !== activeTimetableStaff);
+    updatedSchedules.push({ staffId: activeTimetableStaff, slots: newSlots });
+
+    onUpdateManagement({ ...data, schedules: updatedSchedules });
+  };
+
+  const downloadStaffTemplate = () => {
+    const headers = ['Full Name', 'Official Email', 'Teaching Category', 'Primary Discipline'];
+    const csvContent = [headers.join(','), 'JOHN DOE,john@baylor.edu,BASIC_SUBJECT_LEVEL,MATHEMATICS'].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Staff_Import_Template.csv`;
+    link.click();
   };
 
   return (
@@ -172,60 +214,242 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {activeTab === 'STAFF' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in slide-in-from-bottom-4">
-           <div className="lg:col-span-4 bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100 h-fit">
-              <h4 className="text-xl font-black uppercase mb-6 tracking-tight">Enrol Faculty</h4>
-              <div className="space-y-4">
-                 <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Full Legal Name</label>
-                    <input className="w-full bg-slate-50 border-2 p-4 rounded-xl font-black uppercase text-xs outline-none focus:border-indigo-600 transition-all" placeholder="e.g. JOHN AMANOR" value={newStaff.name} onChange={(e) => setNewStaff({...newStaff, name: e.target.value})} />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Verified Email Address</label>
-                    <input className="w-full bg-slate-50 border-2 p-4 rounded-xl font-black text-xs outline-none focus:border-indigo-600 transition-all" placeholder="john@uba.edu.gh" value={newStaff.email} onChange={(e) => setNewStaff({...newStaff, email: e.target.value})} />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase ml-1">Academic Category</label>
-                    <select className="w-full bg-slate-50 border-2 p-4 rounded-xl font-black text-xs uppercase outline-none focus:border-indigo-600 appearance-none" value={newStaff.category} onChange={(e) => setNewStaff({...newStaff, category: e.target.value as any})}>
-                      <option value="DAYCARE_FACILITATOR">Daycare (Creche/Nursery)</option>
-                      <option value="KG_FACILITATOR">Kindergarten</option>
-                      <option value="BASIC_SUBJECT_LEVEL">Basic (1-6)</option>
-                      <option value="JHS_SPECIALIST">JHS Specialist (7-9)</option>
-                    </select>
-                 </div>
-                 <button onClick={addStaff} disabled={isProvisioning} className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] shadow-xl hover:bg-indigo-700 transition-all">
-                    {isProvisioning ? 'Syncing...' : 'Provision Facilitator +'}
-                 </button>
-              </div>
-           </div>
-
-           <div className="lg:col-span-8 bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100">
-              <div className="flex justify-between items-center mb-8 border-b-2 border-slate-50 pb-4">
-                <div>
-                   <h4 className="text-xl font-black uppercase tracking-tight">Faculty Matrix</h4>
-                   <p className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{(data.staff || []).length} Managed Identities</p>
-                </div>
-                <button onClick={() => staffImportRef.current?.click()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg hover:bg-black transition-all">Import CSV 📥</button>
-                <input type="file" ref={staffImportRef} className="hidden" accept=".csv" />
-              </div>
-              <div className="grid grid-cols-1 gap-3">
-                 {(data.staff || []).map(s => (
-                   <div key={s.id} className="p-5 bg-slate-50 rounded-[2rem] flex items-center justify-between group hover:bg-white hover:border-indigo-200 border-2 border-transparent transition-all shadow-sm">
-                      <div className="flex items-center gap-5">
-                         <div className="w-12 h-12 bg-slate-950 text-white rounded-2xl flex items-center justify-center font-black text-lg shadow-lg">{s.name.charAt(0)}</div>
-                         <div>
-                            <div className="font-black text-slate-900 uppercase text-[11px] tracking-tight">{s.name}</div>
-                            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">{s.category.replace('_', ' ')} • PIN: <span className="text-indigo-600">{s.uniqueCode}</span></div>
-                         </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setActiveMappingStaff(s)} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-indigo-700 transition-all">Academic Mapping</button>
-                        <button onClick={() => removeStaff(s.id)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100 transition-all opacity-0 group-hover:opacity-100 shadow-sm"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                      </div>
-                   </div>
+        <div className="space-y-8 animate-in slide-in-from-bottom-4">
+           {/* Sub-navigation for STAFF */}
+           <div className="flex justify-center no-print">
+              <div className="bg-white p-2 rounded-full border border-slate-200 shadow-xl flex gap-1">
+                 {[
+                   { id: 'ENROLL', label: 'Enrollment', icon: '📝' },
+                   { id: 'MATRIX', label: 'Duty Matrix', icon: '⛓️' },
+                   { id: 'TIMETABLE', label: 'Timetables', icon: '📅' },
+                   { id: 'SCHEDULE', label: 'Master Schedule', icon: '🏛️' }
+                 ].map(tab => (
+                   <button 
+                    key={tab.id} 
+                    onClick={() => setStaffSubTab(tab.id as any)}
+                    className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${staffSubTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                   >
+                     <span>{tab.icon}</span> {tab.label}
+                   </button>
                  ))}
               </div>
            </div>
+
+           {staffSubTab === 'ENROLL' && (
+             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-5 bg-white rounded-[3rem] p-10 shadow-xl border-4 border-slate-900 h-fit">
+                   <h4 className="text-2xl font-black uppercase mb-8 tracking-tighter flex items-center gap-4">
+                     <span className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg">⚡</span>
+                     Direct Enrollment
+                   </h4>
+                   <div className="space-y-6">
+                      <div className="space-y-1">
+                         <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Legal Identity</label>
+                         <input className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black uppercase text-xs focus:border-indigo-600 transition-all" placeholder="FULL NAME..." value={newStaff.name} onChange={(e) => setNewStaff({...newStaff, name: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                         <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Official Email</label>
+                         <input className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black text-xs focus:border-indigo-600 transition-all" placeholder="OFFICIAL@ACADEMY.COM" value={newStaff.email} onChange={(e) => setNewStaff({...newStaff, email: e.target.value})} />
+                      </div>
+                      <div className="space-y-1">
+                         <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Academic Category</label>
+                         <select className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black text-xs uppercase appearance-none" value={newStaff.category} onChange={(e) => setNewStaff({...newStaff, category: e.target.value as any})}>
+                            <option value="BASIC_SUBJECT_LEVEL">Basic Subject Level</option>
+                            <option value="JHS_SPECIALIST">JHS Specialist</option>
+                            <option value="KG_FACILITATOR">KG Facilitator</option>
+                            <option value="DAYCARE_FACILITATOR">Daycare Facilitator</option>
+                         </select>
+                      </div>
+                      <div className="space-y-1">
+                         <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Primary Discipline</label>
+                         <input className="w-full bg-slate-50 border-4 border-slate-100 p-5 rounded-[1.5rem] font-black uppercase text-xs focus:border-indigo-600 transition-all" placeholder="ASSIGN SUBJECT..." value={newStaff.discipline} onChange={(e) => setNewStaff({...newStaff, discipline: e.target.value})} />
+                      </div>
+                      <button onClick={addStaff} disabled={isProvisioning} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
+                         {isProvisioning ? 'PROVISIONING...' : 'Execute faculty Handshake'}
+                      </button>
+                   </div>
+                </div>
+
+                <div className="lg:col-span-7 bg-white rounded-[3rem] p-10 shadow-xl border border-slate-100">
+                   <div className="flex justify-between items-center mb-10 border-b-2 border-slate-50 pb-6">
+                      <div>
+                        <h4 className="text-2xl font-black uppercase tracking-tight">Active Faculty Registry</h4>
+                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{(data.staff || []).length} Logged Identities</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={downloadStaffTemplate} className="bg-slate-50 text-slate-500 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase border border-slate-200">Template 📋</button>
+                        <button onClick={() => staffImportRef.current?.click()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg">Bulk Upload 📥</button>
+                        <input type="file" ref={staffImportRef} className="hidden" accept=".csv" />
+                      </div>
+                   </div>
+                   <div className="space-y-3">
+                      {(data.staff || []).map(s => (
+                        <div key={s.id} className="p-6 bg-slate-50 rounded-[2.5rem] flex items-center justify-between group hover:bg-white hover:border-indigo-200 border-4 border-transparent transition-all">
+                           <div className="flex items-center gap-6">
+                              <div className="w-14 h-14 bg-slate-950 text-white rounded-2xl flex items-center justify-center font-black text-xl shadow-lg">{s.name.charAt(0)}</div>
+                              <div>
+                                 <div className="font-black text-slate-900 uppercase text-sm tracking-tight">{s.name}</div>
+                                 <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{s.primaryDiscipline || 'Generalist'} • <span className="text-indigo-600">{s.uniqueCode}</span></div>
+                              </div>
+                           </div>
+                           <button onClick={() => removeStaff(s.id)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100 transition-all opacity-0 group-hover:opacity-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
+           )}
+
+           {staffSubTab === 'MATRIX' && (
+             <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100">
+                <h4 className="text-3xl font-black uppercase mb-10 tracking-tight">Duty Allocation Matrix</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {(data.staff || []).map(s => (
+                     <div key={s.id} className="bg-slate-50 p-8 rounded-[3rem] border-2 border-transparent hover:border-indigo-100 transition-all relative overflow-hidden group">
+                        <div className="flex items-center gap-4 mb-6">
+                           <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-lg">{s.name.charAt(0)}</div>
+                           <div>
+                              <div className="font-black text-slate-900 uppercase text-xs">{s.name}</div>
+                              <div className="text-[8px] font-bold text-slate-400 uppercase">Load: {(data.mappings || []).filter(m => m.staffId === s.id).length} Domains</div>
+                           </div>
+                        </div>
+                        <div className="space-y-2">
+                           {(data.mappings || []).filter(m => m.staffId === s.id).map(m => (
+                             <div key={m.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100">
+                                <span className="text-[9px] font-black uppercase text-indigo-700">{data.subjects.find(sub => sub.id === m.subjectId)?.name || m.subjectId} @ {m.className}</span>
+                                <button onClick={() => removeMapping(m.id)} className="text-slate-200 hover:text-rose-500"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                             </div>
+                           ))}
+                        </div>
+                        <button onClick={() => setActiveMappingStaff(s)} className="mt-6 w-full py-3 bg-white border-2 border-indigo-100 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">Add Domain +</button>
+                     </div>
+                   ))}
+                </div>
+             </div>
+           )}
+
+           {staffSubTab === 'TIMETABLE' && (
+             <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100 space-y-12">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+                   <h4 className="text-3xl font-black uppercase tracking-tight">Staff Timetable Architect</h4>
+                   <select 
+                    className="bg-slate-900 text-white px-8 py-4 rounded-[2rem] font-black uppercase text-xs outline-none shadow-xl min-w-[300px]"
+                    value={activeTimetableStaff || ''}
+                    onChange={(e) => setActiveTimetableStaff(e.target.value)}
+                   >
+                      <option value="">-- SELECT FACILITATOR --</option>
+                      {data.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   </select>
+                </div>
+
+                {!activeTimetableStaff ? (
+                  <div className="py-40 text-center opacity-10 flex flex-col items-center">
+                    <div className="text-[10rem]">🗓️</div>
+                    <p className="font-black uppercase tracking-[0.5em] text-sm">Pick a facilitator node to begin scheduling</p>
+                  </div>
+                ) : (
+                  <div className="animate-in fade-in slide-in-from-bottom-4">
+                     <div className="overflow-x-auto rounded-[3rem] border-4 border-slate-900 shadow-2xl">
+                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                           <thead>
+                              <tr className="bg-slate-900 text-white">
+                                 <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-r border-white/5">PERIOD</th>
+                                 {DAYS.map(day => (
+                                   <th key={day} className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-center border-r border-white/5">{day}</th>
+                                 ))}
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-slate-100">
+                              {PERIODS.map(period => (
+                                <tr key={period} className="hover:bg-slate-50 transition-colors">
+                                   <td className="px-8 py-10 font-black text-slate-400 text-center border-r border-slate-100 bg-slate-50/50">
+                                      <div className="text-xl">P{period}</div>
+                                      <div className="text-[8px] uppercase opacity-60">Academic Slot</div>
+                                   </td>
+                                   {DAYS.map(day => {
+                                     const currentSched = (data.schedules || []).find(s => s.staffId === activeTimetableStaff);
+                                     const slot = currentSched?.slots.find(s => s.day === day && s.period === period);
+                                     const mappings = (data.mappings || []).filter(m => m.staffId === activeTimetableStaff);
+                                     
+                                     return (
+                                       <td key={day} className="p-4 border-r border-slate-100">
+                                          <div className="space-y-2">
+                                             <select 
+                                               className="w-full bg-white border-2 border-slate-100 p-2 rounded-xl text-[8px] font-black uppercase outline-none focus:border-indigo-600 transition-all"
+                                               value={slot ? `${slot.className}|${slot.subject}` : ''}
+                                               onChange={(e) => {
+                                                 const [cls, sub] = e.target.value.split('|');
+                                                 handleUpdateSchedule(day, period, cls, sub);
+                                               }}
+                                             >
+                                                <option value="">FREE SLOT</option>
+                                                {mappings.map(m => (
+                                                  <option key={m.id} value={`${m.className}|${data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId}`}>
+                                                    {m.className} • {data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId}
+                                                  </option>
+                                                ))}
+                                             </select>
+                                             {slot && (
+                                               <div className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-[7px] font-black uppercase text-center shadow-lg animate-in zoom-in-95">
+                                                  {slot.className}
+                                               </div>
+                                             )}
+                                          </div>
+                                       </td>
+                                     );
+                                   })}
+                                </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+                  </div>
+                )}
+             </div>
+           )}
+
+           {staffSubTab === 'SCHEDULE' && (
+             <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100 space-y-12">
+                <h4 className="text-3xl font-black uppercase tracking-tight">Institutional Master Schedule</h4>
+                <div className="overflow-x-auto rounded-[3rem] border-4 border-slate-100 shadow-2xl">
+                   <table className="w-full text-left border-collapse min-w-[1200px]">
+                      <thead>
+                         <tr className="bg-slate-900 text-white">
+                            <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest border-r border-white/5">DAY / PERIOD</th>
+                            {PERIODS.map(p => (
+                              <th key={p} className="px-4 py-6 text-[10px] font-black uppercase tracking-widest text-center border-r border-white/5">P{p}</th>
+                            ))}
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                         {DAYS.map(day => (
+                           <tr key={day} className="align-top">
+                              <td className="px-8 py-10 font-black text-slate-900 border-r border-slate-200 bg-slate-50 uppercase text-sm">{day}</td>
+                              {PERIODS.map(period => (
+                                <td key={period} className="p-3 border-r border-slate-100 min-h-[150px]">
+                                   <div className="space-y-1.5">
+                                      {(data.schedules || []).map(s => {
+                                        const slot = s.slots.find(sl => sl.day === day && sl.period === period);
+                                        const staff = data.staff.find(st => st.id === s.staffId);
+                                        if (!slot || !staff) return null;
+                                        return (
+                                          <div key={s.staffId} className="bg-white p-3 rounded-2xl border-2 border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-500 transition-all group">
+                                             <div className="text-[7px] font-black uppercase text-indigo-600 mb-1">{staff.name.split(' ')[0]}</div>
+                                             <div className="text-[8px] font-black text-slate-900 uppercase leading-none">{slot.className}</div>
+                                             <div className="text-[6px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{slot.subject}</div>
+                                          </div>
+                                        );
+                                      })}
+                                   </div>
+                                </td>
+                              ))}
+                           </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+             </div>
+           )}
         </div>
       )}
 

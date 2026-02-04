@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AssessmentType, SchoolGroup, UserRole } from '../../types';
 import { SCHOOL_HIERARCHY, WEEK_COUNT } from '../../constants';
@@ -36,10 +35,8 @@ const Topbar: React.FC<TopbarProps> = ({
 
   const getPortalOptions = () => {
     switch(userRole) {
-      // Fix: Changed 'SUPER_ADMIN' to lowercase 'super_admin' to match UserRole type
       case 'super_admin':
         return [{ id: 'SUPER_ADMIN', label: 'Global Registry', icon: '🌍' }];
-      // Fix: Changed 'SCHOOL_ADMIN' to lowercase 'school_admin' to match UserRole type
       case 'school_admin':
         return [
           { id: 'HOME', label: 'Home', icon: '🏠' },
@@ -49,7 +46,6 @@ const Topbar: React.FC<TopbarProps> = ({
           { id: 'MESSAGES', label: 'Messages', icon: '💬' },
           { id: 'ADMIN', label: 'Identity', icon: '⚙️' }
         ];
-      // Fix: Changed 'FACILITATOR' to lowercase 'facilitator' to match UserRole type
       case 'facilitator':
         return [
           { id: 'HOME', label: 'Home', icon: '🏠' },
@@ -57,12 +53,17 @@ const Topbar: React.FC<TopbarProps> = ({
           { id: 'PLANNING', label: 'Plan', icon: '📅' },
           { id: 'MESSAGES', label: 'Support', icon: '💬' }
         ];
-      // Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type
       case 'pupil':
         return [{ id: 'PUPILS', label: 'My Performance', icon: '📊' }];
       default:
         return [];
     }
+  };
+
+  const handleNavWeek = (dir: 'prev' | 'next') => {
+    const current = parseInt(activeWeek);
+    if (dir === 'prev' && current > 1) onWeekChange((current - 1).toString());
+    if (dir === 'next' && current < WEEK_COUNT) onWeekChange((current + 1).toString());
   };
 
   const options = getPortalOptions();
@@ -76,7 +77,6 @@ const Topbar: React.FC<TopbarProps> = ({
               <span className="text-2xl">🏛️</span>
             </div>
 
-            {/* Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type */}
             {activeView !== 'HOME' && activeView !== 'SUPER_ADMIN' && userRole !== 'pupil' && (
               <button onClick={onBack} className="flex items-center justify-center w-12 h-12 bg-white/5 hover:bg-white/10 rounded-2xl shrink-0 border border-white/10 transition-all">
                 <span className="text-lg">⬅️</span>
@@ -100,7 +100,6 @@ const Topbar: React.FC<TopbarProps> = ({
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-             {/* Fix: Changed 'PUPIL' to lowercase 'pupil' to match UserRole type */}
              {userRole !== 'pupil' && (
                <>
                  <div className="hidden md:flex bg-white/5 px-4 py-2 rounded-xl items-center gap-3 border border-white/10">
@@ -110,11 +109,19 @@ const Topbar: React.FC<TopbarProps> = ({
                     </select>
                  </div>
                  
-                 <div className="bg-white/5 px-3 py-2 rounded-xl flex items-center gap-3 border border-white/10">
-                    <span className="text-[8px] font-black text-sky-400 uppercase tracking-widest">Week</span>
-                    <select className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer" value={activeWeek} onChange={(e) => onWeekChange(e.target.value)}>
-                      {Array.from({ length: WEEK_COUNT }, (_, i) => (i + 1).toString()).map(w => <option key={w} value={w} className="text-slate-900">{w}</option>)}
-                    </select>
+                 <div className="bg-white/5 px-2 py-1 rounded-xl flex items-center gap-2 border border-white/10">
+                    <button onClick={() => handleNavWeek('prev')} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <div className="flex flex-col items-center">
+                      <span className="text-[7px] font-black text-sky-400 uppercase leading-none">Week</span>
+                      <select className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer" value={activeWeek} onChange={(e) => onWeekChange(e.target.value)}>
+                        {Array.from({ length: WEEK_COUNT }, (_, i) => (i + 1).toString()).map(w => <option key={w} value={w} className="text-slate-900">{w}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={() => handleNavWeek('next')} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+                    </button>
                  </div>
                </>
              )}

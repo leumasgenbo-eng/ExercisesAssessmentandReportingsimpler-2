@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { AssessmentType, AssessmentData, Pupil, ExerciseMetadata, SchoolGroup, InterventionRecord, AssessmentAttachment, ManagementState } from '../../types';
-import { EXERCISES_PER_TYPE } from '../../constants';
+import { EXERCISES_PER_TYPE, SCHOOL_HIERARCHY, WEEK_COUNT } from '../../constants';
 import AssessmentHeader from './AssessmentHeader';
 import AssessmentRow from './AssessmentRow';
 import InterventionModal from './InterventionModal';
@@ -18,16 +18,20 @@ interface Props {
   setViewMode: (mode: 'TABLE' | 'INTERVIEW') => void;
   managementData?: ManagementState;
   onExit: () => void;
+  // Navigation helpers passed from App via AssessmentSheet
+  onWeekChange: (w: string) => void;
+  onClassChange: (cls: string) => void;
 }
 
 const ScoringDesk: React.FC<Props> = ({ 
   type, data, onUpdate, selectedExercise, onExerciseChange, availableIndicators, activeSchoolGroup, 
-  viewMode, setViewMode, managementData, onExit
+  viewMode, setViewMode, managementData, onExit, onWeekChange, onClassChange
 }) => {
   const [pupilSearch, setPupilSearch] = useState('');
   const [activeInterventionPupil, setActiveInterventionPupil] = useState<null | Pupil>(null);
   const [activePulseEx, setActivePulseEx] = useState<number>(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
 
   const gridRows = useMemo(() => {
     const masterList = managementData?.masterPupils?.[data.className] || [];
@@ -133,6 +137,35 @@ const ScoringDesk: React.FC<Props> = ({
     }
   };
 
+  // --- NAVIGATION LOGIC ---
+  const handleNavWeek = (dir: 'prev' | 'next') => {
+    const current = parseInt(data.week);
+    if (dir === 'prev' && current > 1) onWeekChange((current - 1).toString());
+    if (dir === 'next' && current < WEEK_COUNT) onWeekChange((current + 1).toString());
+  };
+
+  const handleNavClass = (dir: 'prev' | 'next') => {
+    const classes = SCHOOL_HIERARCHY[activeSchoolGroup].classes;
+    const currentIdx = classes.indexOf(data.className);
+    if (dir === 'prev') {
+      const prevIdx = (currentIdx - 1 + classes.length) % classes.length;
+      onClassChange(classes[prevIdx]);
+    } else {
+      const nextIdx = (currentIdx + 1) % classes.length;
+      onClassChange(classes[nextIdx]);
+    }
+  };
+
+  const horizontalScroll = (dir: 'left' | 'right') => {
+    if (tableScrollRef.current) {
+      const amount = 400;
+      tableScrollRef.current.scrollBy({
+        left: dir === 'left' ? -amount : amount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const isInterviewMode = viewMode === 'INTERVIEW';
   const schoolName = managementData?.settings.name || "UNITED BAYLOR A.";
 
@@ -152,9 +185,36 @@ const ScoringDesk: React.FC<Props> = ({
                   </p>
                </div>
              </div>
-             <h2 className="text-2xl md:text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none truncate mt-6">
-               {data.className} <span className="text-slate-200 mx-2 font-light">/</span> {data.subject || 'GENERAL'}
-             </h2>
+             
+             <div className="flex items-center gap-4 mt-6">
+                <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                  <button onClick={() => handleNavClass('prev')} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm hover:shadow-md">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <h2 className="px-6 text-xl md:text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none truncate">
+                    {data.className}
+                  </h2>
+                  <button onClick={() => handleNavClass('next')} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm hover:shadow-md">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                </div>
+                
+                <span className="text-slate-200 text-4xl font-light">/</span>
+                
+                <div className="flex items-center bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                  <button onClick={() => handleNavWeek('prev')} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm hover:shadow-md">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                  <div className="px-6 text-center">
+                    <span className="block text-[8px] font-black text-indigo-400 uppercase tracking-widest">Active Week</span>
+                    <span className="text-xl md:text-3xl font-black text-indigo-600">{data.week}</span>
+                  </div>
+                  <button onClick={() => handleNavWeek('next')} className="w-10 h-10 flex items-center justify-center bg-white text-slate-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm hover:shadow-md">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                </div>
+             </div>
+             <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">{data.subject || 'GENERAL ACADEMIC DOMAIN'}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -167,7 +227,7 @@ const ScoringDesk: React.FC<Props> = ({
                     Attached Card
                   </button>
                   <button onClick={removeAttachment} className="bg-rose-50 text-rose-500 w-8 h-8 md:w-11 md:h-11 flex items-center justify-center rounded-xl md:rounded-full hover:bg-rose-500 hover:text-white shadow-sm shrink-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                </div>
              ) : (
@@ -193,30 +253,50 @@ const ScoringDesk: React.FC<Props> = ({
       )}
 
       {viewMode === 'TABLE' ? (
-        <div className="bg-white rounded-2xl md:rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full border-collapse">
-              <AssessmentHeader 
-                type={type} data={data} 
-                exerciseNumbers={selectedExercise === 'ALL' ? Array.from({length: EXERCISES_PER_TYPE[type]}, (_, i) => i+1) : selectedExercise} 
-                availableIndicators={availableIndicators} 
-                onExerciseChange={onExerciseChange} 
-                onMetadataChange={handleExerciseMetadataUpdate} 
-                onApplyAll={handleExerciseMetadataUpdate as any} 
-                showTotal={true} 
-              />
-              <tbody className="divide-y divide-slate-100">
-                {gridRows.map((pup, pidx) => (
-                  <AssessmentRow 
-                    key={pup.id} index={pidx} pupil={pup} 
-                    exerciseNumbers={selectedExercise === 'ALL' ? Array.from({length: EXERCISES_PER_TYPE[type]}, (_, i) => i+1) : selectedExercise} 
-                    exercisesMetadata={data.exercises} availableIndicators={availableIndicators} 
-                    onUpdatePupil={updatePupil} onInterventionClick={setActiveInterventionPupil} 
-                    showTotal={true} type={type} 
-                  />
-                ))}
-              </tbody>
-            </table>
+        <div className="relative group/table-container">
+          {/* Horizontal Scroll Navigation Controls */}
+          <div className="no-print absolute top-1/2 -translate-y-1/2 left-0 z-50 transition-opacity opacity-0 group-hover/table-container:opacity-100">
+             <button 
+               onClick={() => horizontalScroll('left')}
+               className="w-12 h-12 bg-slate-900/60 backdrop-blur-md text-white rounded-r-full flex items-center justify-center hover:bg-slate-900 transition-all shadow-xl border border-white/10"
+             >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M15 19l-7-7 7-7" /></svg>
+             </button>
+          </div>
+          <div className="no-print absolute top-1/2 -translate-y-1/2 right-0 z-50 transition-opacity opacity-0 group-hover/table-container:opacity-100">
+             <button 
+               onClick={() => horizontalScroll('right')}
+               className="w-12 h-12 bg-slate-900/60 backdrop-blur-md text-white rounded-l-full flex items-center justify-center hover:bg-slate-900 transition-all shadow-xl border border-white/10"
+             >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M9 5l7 7-7 7" /></svg>
+             </button>
+          </div>
+
+          <div className="bg-white rounded-2xl md:rounded-[3rem] border border-slate-200 shadow-2xl overflow-hidden">
+            <div ref={tableScrollRef} className="overflow-x-auto scrollbar-hide">
+              <table className="w-full border-collapse">
+                <AssessmentHeader 
+                  type={type} data={data} 
+                  exerciseNumbers={selectedExercise === 'ALL' ? Array.from({length: EXERCISES_PER_TYPE[type]}, (_, i) => i+1) : selectedExercise} 
+                  availableIndicators={availableIndicators} 
+                  onExerciseChange={onExerciseChange} 
+                  onMetadataChange={handleExerciseMetadataUpdate} 
+                  onApplyAll={handleExerciseMetadataUpdate as any} 
+                  showTotal={true} 
+                />
+                <tbody className="divide-y divide-slate-100">
+                  {gridRows.map((pup, pidx) => (
+                    <AssessmentRow 
+                      key={pup.id} index={pidx} pupil={pup} 
+                      exerciseNumbers={selectedExercise === 'ALL' ? Array.from({length: EXERCISES_PER_TYPE[type]}, (_, i) => i+1) : selectedExercise} 
+                      exercisesMetadata={data.exercises} availableIndicators={availableIndicators} 
+                      onUpdatePupil={updatePupil} onInterventionClick={setActiveInterventionPupil} 
+                      showTotal={true} type={type} 
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (

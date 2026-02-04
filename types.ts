@@ -1,6 +1,6 @@
 /**
- * SSMAP CORE SCHEMA v9.6.2
- * United Baylor Academy - Clinical Inclusion Module
+ * SSMAP CORE SCHEMA v9.6.3
+ * United Baylor Academy - Clinical Inclusion & Scheduling Module
  */
 
 export type AssessmentType = 'CLASS' | 'HOME' | 'PROJECT' | 'CRITERION';
@@ -20,6 +20,18 @@ export type FacilitatorRoleType = 'CLASS_BASED' | 'SUBJECT_BASED';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME';
 
 export type UserRole = 'super_admin' | 'school_admin' | 'facilitator' | 'pupil';
+
+export interface ScheduleSlot {
+  day: string;
+  period: number;
+  className: string;
+  subject: string;
+}
+
+export interface StaffSchedule {
+  staffId: string;
+  slots: ScheduleSlot[];
+}
 
 // --- SPECIAL NEEDS MODULE ---
 export type SpecialNeedSeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'PROFOUND';
@@ -60,7 +72,8 @@ export interface Staff {
   role: string;
   category: FacilitatorCategory; 
   email: string;
-  uniqueCode: string;       
+  uniqueCode: string;
+  primaryDiscipline?: string;
 }
 
 export interface MasterPupilEntry {
@@ -102,12 +115,9 @@ export interface ExerciseMetadata {
   skillLabel?: string;
 }
 
-/**
- * Added AssessmentAttachment type to support clinical/external card uploads
- */
 export interface AssessmentAttachment {
   name: string;
-  data: string; // base64 encoded string
+  data: string; 
   mimeType: string;
 }
 
@@ -121,9 +131,6 @@ export interface AssessmentData {
   subject?: string;
   exercises: Record<number, ExerciseMetadata>;
   pupils: Pupil[];
-  /**
-   * Added attachment support for assessment records
-   */
   attachment?: AssessmentAttachment;
 }
 
@@ -149,9 +156,6 @@ export interface WeeklyMapping {
   classWorkCount: number;
   homeWorkCount: number;
   projectWorkCount: number;
-  /**
-   * Added planning metadata properties
-   */
   resources?: string[];
   bloomsLevels?: string[];
   weekStartDate?: string;
@@ -168,15 +172,9 @@ export interface FacilitatorSubjectMapping {
   className: string;
   subjectId: string;
   type: FacilitatorRoleType;
-  /**
-   * Added employmentType to track contract status in mappings
-   */
   employmentType: EmploymentType;
 }
 
-/**
- * Added CurriculumEntry for NaCCA syllabus integration
- */
 export interface CurriculumEntry {
   id: string;
   levelGroup: SchoolGroup;
@@ -188,9 +186,6 @@ export interface CurriculumEntry {
   indicatorText: string;
 }
 
-/**
- * Added UserSession for identity management and merit tracking
- */
 export interface UserSession {
   role: UserRole;
   nodeName: string;
@@ -204,9 +199,6 @@ export interface UserSession {
   pupilId?: string;
 }
 
-/**
- * Added RegisteredSchool for global node management
- */
 export interface RegisteredSchool {
   id: string;
   name: string;
@@ -215,9 +207,6 @@ export interface RegisteredSchool {
   notified: boolean;
 }
 
-/**
- * Added ManagementSubView for router control
- */
 export type ManagementSubView = 'SUBJECT_MAPPING' | 'PLANNING' | 'COMPLIANCE' | 'ROSTER';
 
 export interface ManagementState {
@@ -225,9 +214,6 @@ export interface ManagementState {
     name: string;
     institutionalId: string;
     hubId: string;
-    /**
-     * Added institutional metadata fields
-     */
     slogan?: string;
     address?: string;
     contact?: string;
@@ -250,11 +236,9 @@ export interface ManagementState {
   messages: Message[];
   specialNeedsRegistry: SpecialPupilRecord[];
   specialNeedsAudits: SpecialNeedsAudit[];
-  /**
-   * Added extended registry fields
-   */
   curriculum?: CurriculumEntry[];
   superAdminRegistry?: RegisteredSchool[];
+  schedules?: StaffSchedule[];
 }
 
 export interface AppState {
