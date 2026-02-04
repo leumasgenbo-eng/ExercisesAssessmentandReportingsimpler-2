@@ -1,5 +1,5 @@
 /**
- * SSMAP CORE SCHEMA v9.5.8
+ * SSMAP CORE SCHEMA v9.6.1
  * United Baylor Academy - Daily Activity Pulse System
  */
 
@@ -73,6 +73,36 @@ export interface InterventionRecord {
   actionTaken: string;
   notes: string;
   facilitator: string;
+}
+
+// --- SPECIAL NEEDS MODULE ---
+export type SpecialNeedSeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'PROFOUND';
+
+export interface SpecialPupilRecord {
+  pupilId: string;
+  pupilName: string;
+  className: string;
+  category: string;
+  severity: SpecialNeedSeverity;
+  facilitatorId: string;
+  facilitatorNote: string;
+  specialistConfirmed: boolean;
+  specialistId?: string;
+  specialistNote?: string;
+  learningApproach: string;
+  furtherRecommendations: string;
+  timestamp: string;
+  lastAuditDate?: string;
+}
+
+export interface SpecialNeedsAudit {
+  id: string;
+  timeframe: 'WEEK' | 'MONTH' | 'TERM' | 'YEAR';
+  value: string; // e.g. "Week 12"
+  timestamp: string;
+  auditorId: string;
+  aggregateAnalysis: string;
+  complianceScore: number;
 }
 
 export interface Pupil {
@@ -200,6 +230,8 @@ export interface ManagementState {
   superAdminRegistry?: RegisteredSchool[];
   logs?: any[];
   curriculum: CurriculumEntry[];
+  specialNeedsRegistry: SpecialPupilRecord[];
+  specialNeedsAudits: SpecialNeedsAudit[];
 }
 
 export interface AppState {

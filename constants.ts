@@ -28,6 +28,30 @@ export const CRITERION_SKILLS = [
   "Any Other"
 ];
 
+export const SPECIAL_NEEDS_CATEGORIES = [
+  "S1: Dyslexia / Literacy Difficulty",
+  "S2: Dyscalculia / Numerical Barrier",
+  "S3: ADHD / Attention Deficit",
+  "S4: Autism Spectrum Disorder (ASD)",
+  "S5: Visual Impairment / Low Vision",
+  "S6: Auditory Processing Disorder",
+  "S7: Physical / Orthopedic Disability",
+  "S8: Emotional / Behavioral Disorder",
+  "S9: Speech & Language Delay",
+  "S10: Gifted & Talented (Special Need Type 2)"
+];
+
+export const LEARNING_APPROACHES = [
+  "LA1: Multisensory Visual-Auditory-Kinesthetic",
+  "LA2: Task-Step Scaffolding (Chunking)",
+  "LA3: Social Story Integration",
+  "LA4: Assistive Tech / Text-to-Speech",
+  "LA5: Differentiated Curricular Depth",
+  "LA6: Behavioral Incentive Framework",
+  "LA7: Quiet Zone / Sensory Regulation",
+  "LA8: One-on-One Remedial Shadowing"
+];
+
 export const INTERVENTION_REASONS = [
   "R1: Phonological/Literacy Gap",
   "R2: Numerical/Fluency Delay",
@@ -149,5 +173,7 @@ export const INITIAL_MANAGEMENT_DATA: ManagementState = {
   weeklyMappings: [],
   masterPupils: {},
   superAdminRegistry: [],
-  messages: []
+  messages: [],
+  specialNeedsRegistry: [],
+  specialNeedsAudits: []
 };

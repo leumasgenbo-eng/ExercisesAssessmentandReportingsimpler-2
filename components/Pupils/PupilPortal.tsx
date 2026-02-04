@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppState, AssessmentData, AssessmentType } from '../../types';
+import { AppState, AssessmentData, AssessmentType, ManagementState } from '../../types';
 import Registry from './Registry';
 import ExerciseBroadsheet from './ExerciseBroadsheet';
 import InterventionBroadsheet from './InterventionBroadsheet';
@@ -8,23 +8,26 @@ import CorrectionsBroadsheet from './CorrectionsBroadsheet';
 import CriterionGrowthMatrix from './CriterionGrowthMatrix';
 import BookCountRegistry from './BookCountRegistry';
 import DefaulterList from './DefaulterList';
+import SpecialNeedsPortal from './SpecialNeedsPortal';
 
 interface Props {
   fullState: AppState;
   onUpdateState?: (type: AssessmentType, key: string, data: AssessmentData) => void;
   onUpdateBookCounts?: (key: string, data: { count: number; date: string; enrollment?: number }) => void;
+  onUpdateManagement?: (data: ManagementState) => void;
   isFocusMode?: boolean;
   setIsFocusMode?: (focus: boolean) => void;
   isIndividualOnly?: boolean;
 }
 
-type PupilSubView = 'REGISTRY' | 'CORRECTIONS' | 'INT_HUB' | 'INT_MATRIX' | 'GROWTH' | 'HEAD_COUNT' | 'BROADSHEET' | 'DEFAULTERS';
+type PupilSubView = 'REGISTRY' | 'CORRECTIONS' | 'INT_HUB' | 'INT_MATRIX' | 'GROWTH' | 'HEAD_COUNT' | 'BROADSHEET' | 'DEFAULTERS' | 'SPECIAL_NEEDS';
 
-const PupilPortal: React.FC<Props> = ({ fullState, onUpdateState, onUpdateBookCounts, isFocusMode = false, setIsFocusMode, isIndividualOnly = false }) => {
+const PupilPortal: React.FC<Props> = ({ fullState, onUpdateState, onUpdateBookCounts, onUpdateManagement, isFocusMode = false, setIsFocusMode, isIndividualOnly = false }) => {
   const [activeTab, setActiveTab] = useState<PupilSubView>(isIndividualOnly ? 'BROADSHEET' : 'REGISTRY');
 
   const handleUpdate = onUpdateState || (() => {});
   const handleBookUpdate = onUpdateBookCounts || (() => {});
+  const handleManagementUpdate = onUpdateManagement || (() => {});
 
   const tabs = isIndividualOnly 
     ? [
@@ -39,6 +42,7 @@ const PupilPortal: React.FC<Props> = ({ fullState, onUpdateState, onUpdateBookCo
         { id: 'GROWTH', label: 'Growth Matrix', color: 'bg-rose-600', hover: 'hover:text-rose-600' },
         { id: 'INT_HUB', label: 'Interventions', color: 'bg-rose-600', hover: 'hover:text-rose-600' },
         { id: 'BROADSHEET', label: 'Broad Sheet', color: 'bg-slate-900', hover: 'hover:text-slate-600' },
+        { id: 'SPECIAL_NEEDS', label: 'Special Needs', color: 'bg-indigo-800', hover: 'hover:text-indigo-600' },
       ] as const;
 
   return (
@@ -84,6 +88,7 @@ const PupilPortal: React.FC<Props> = ({ fullState, onUpdateState, onUpdateBookCo
         {activeTab === 'GROWTH' && <CriterionGrowthMatrix fullState={fullState} />}
         {activeTab === 'HEAD_COUNT' && <BookCountRegistry fullState={fullState} onUpdateBookCounts={handleBookUpdate} />}
         {activeTab === 'BROADSHEET' && <ExerciseBroadsheet fullState={fullState} />}
+        {activeTab === 'SPECIAL_NEEDS' && <SpecialNeedsPortal fullState={fullState} onUpdateManagement={handleManagementUpdate} />}
       </div>
     </div>
   );

@@ -13,26 +13,73 @@ import SuperAdminPortal from './components/Admin/SuperAdminPortal';
 
 type ViewType = 'HOME' | 'ASSESSMENT' | 'FACILITATORS' | 'PLANNING' | 'ADMIN' | 'PUPILS' | 'MESSAGES' | 'SUPER_ADMIN';
 
+const SESSION_KEY = 'uba_session_v96';
+const NAV_KEY = 'uba_nav_context_v96';
+const STATE_KEY = 'uba_assessment_v96';
+
 const App: React.FC = () => {
-  const [session, setSession] = useState<UserSession | null>(null);
-  const [activeView, setActiveView] = useState<ViewType>('HOME');
-  const [viewHistory, setViewHistory] = useState<ViewType[]>(['HOME']);
+  // Load Session from Storage
+  const [session, setSession] = useState<UserSession | null>(() => {
+    const saved = localStorage.getItem(SESSION_KEY);
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Navigation State Initialization
+  const [activeView, setActiveView] = useState<ViewType>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeView as ViewType) : 'HOME';
+  });
+
+  const [viewHistory, setViewHistory] = useState<ViewType[]>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).viewHistory as ViewType[]) : ['HOME'];
+  });
   
-  const [activeTab, setActiveTab] = useState<AssessmentType>('CLASS');
-  const [activeSchoolGroup, setActiveSchoolGroup] = useState<SchoolGroup>('LOWER_BASIC');
-  const [activeClass, setActiveClass] = useState<string>('Basic 1A');
-  const [activeSubject, setActiveSubject] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<AssessmentType>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeTab as AssessmentType) : 'CLASS';
+  });
+
+  const [activeSchoolGroup, setActiveSchoolGroup] = useState<SchoolGroup>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeSchoolGroup as SchoolGroup) : 'LOWER_BASIC';
+  });
+
+  const [activeClass, setActiveClass] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeClass as string) : 'Basic 1A';
+  });
+
+  const [activeSubject, setActiveSubject] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeSubject as string) : '';
+  });
   
-  const [activeYear, setActiveYear] = useState<string>("2024/2025");
-  const [activeTerm, setActiveTerm] = useState<string>("1ST TERM");
-  const [activeMonth, setActiveMonth] = useState<string>("MONTH 1");
-  const [activeWeek, setActiveWeek] = useState<string>("1");
+  const [activeYear, setActiveYear] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeYear as string) : "2024/2025";
+  });
+
+  const [activeTerm, setActiveTerm] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeTerm as string) : "1ST TERM";
+  });
+
+  const [activeMonth, setActiveMonth] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeMonth as string) : "MONTH 1";
+  });
+
+  const [activeWeek, setActiveWeek] = useState<string>(() => {
+    const saved = localStorage.getItem(NAV_KEY);
+    return saved ? (JSON.parse(saved).activeWeek as string) : "1";
+  });
 
   const [selectedExercise, setSelectedExercise] = useState<number[] | 'ALL'>('ALL');
   const [isFocusMode, setIsFocusMode] = useState(false);
   
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('uba_assessment_v5');
+    const saved = localStorage.getItem(STATE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -41,7 +88,9 @@ const App: React.FC = () => {
           management: {
             ...INITIAL_MANAGEMENT_DATA,
             ...parsed.management,
-            messages: parsed.management.messages || []
+            messages: parsed.management.messages || [],
+            specialNeedsRegistry: parsed.management.specialNeedsRegistry || [],
+            specialNeedsAudits: parsed.management.specialNeedsAudits || []
           }
         };
       } catch (e) {}
@@ -56,9 +105,25 @@ const App: React.FC = () => {
     };
   });
 
+  // Sync Global State
   useEffect(() => {
-    localStorage.setItem('uba_assessment_v5', JSON.stringify(state));
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
   }, [state]);
+
+  // Sync Session
+  useEffect(() => {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else localStorage.removeItem(SESSION_KEY);
+  }, [session]);
+
+  // Sync Navigation Context
+  useEffect(() => {
+    const navContext = {
+      activeView, viewHistory, activeTab, activeSchoolGroup, activeClass,
+      activeSubject, activeYear, activeTerm, activeMonth, activeWeek
+    };
+    localStorage.setItem(NAV_KEY, JSON.stringify(navContext));
+  }, [activeView, viewHistory, activeTab, activeSchoolGroup, activeClass, activeSubject, activeYear, activeTerm, activeMonth, activeWeek]);
 
   const navigateToView = useCallback((view: ViewType) => {
     setViewHistory(prev => {
@@ -86,7 +151,6 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, management: newData }));
   }, []);
 
-  // Contextual Planned Indicators v9.6.0 - Added safety spread for weeklyMappings
   const plannedIndicators = useMemo(() => {
     const mappings = state.management?.weeklyMappings || [];
     const activeRoadmaps = mappings.filter(m => 
@@ -124,6 +188,14 @@ const App: React.FC = () => {
       }
     }
     setSession(userSession);
+  };
+
+  const handleLogout = () => {
+    setSession(null);
+    setActiveView('HOME');
+    setViewHistory(['HOME']);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(NAV_KEY);
   };
 
   const dataKey = `${activeYear}|${activeTerm}|${activeMonth}|${activeWeek}|${activeClass}|${activeSubject}`;
@@ -170,10 +242,6 @@ const App: React.FC = () => {
     );
   }
 
-  if (session.role === 'pupil' && activeView !== 'PUPILS') {
-    setActiveView('PUPILS');
-  }
-
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-700 ${isFocusMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
       {!isFocusMode && (
@@ -196,7 +264,7 @@ const App: React.FC = () => {
           activeWeek={activeWeek} 
           onWeekChange={setActiveWeek} 
           onPrint={() => window.print()}
-          onLogout={() => setSession(null)}
+          onLogout={handleLogout}
           userRole={session.role}
           isFocusMode={isFocusMode}
         />
@@ -247,6 +315,7 @@ const App: React.FC = () => {
             <PupilPortal 
               fullState={state} 
               onUpdateState={(type, key, data) => setState(prev => ({...prev, [type === 'CLASS' ? 'classWork' : type === 'HOME' ? 'homeWork' : type === 'PROJECT' ? 'projectWork' : 'criterionWork']: {...prev[type === 'CLASS' ? 'classWork' : type === 'HOME' ? 'homeWork' : type === 'PROJECT' ? 'projectWork' : 'criterionWork'], [key]: data}}))}
+              onUpdateManagement={updateManagementData}
               isFocusMode={isFocusMode} 
               setIsFocusMode={setIsFocusMode}
               isIndividualOnly={session.role === 'pupil'}
@@ -258,7 +327,10 @@ const App: React.FC = () => {
               data={state.management} 
               fullState={state} 
               onUpdateManagement={updateManagementData} 
-              onResetSystem={() => setState({ classWork: {}, homeWork: {}, projectWork: {}, criterionWork: {}, bookCountRecords: {}, management: INITIAL_MANAGEMENT_DATA })}
+              onResetSystem={() => {
+                setState({ classWork: {}, homeWork: {}, projectWork: {}, criterionWork: {}, bookCountRecords: {}, management: INITIAL_MANAGEMENT_DATA });
+                handleLogout();
+              }}
               onRestoreSystem={setState}
             />
           )}
@@ -310,7 +382,7 @@ const App: React.FC = () => {
         <footer className="no-print py-6 px-12 bg-white/80 backdrop-blur-md border-t border-slate-200 flex justify-between items-center z-50">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v9.6.0 • Secured Session</span>
+            <span className="text-[9px] font-black uppercase text-slate-400 tracking-[0.4em]">SSMAP Core v9.6.1 • Secured Session</span>
           </div>
           <div className="flex items-center gap-6">
             <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Active Identity: {session.role}</span>

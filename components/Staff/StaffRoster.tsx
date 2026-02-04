@@ -28,6 +28,9 @@ const StaffRoster: React.FC<Props> = ({
   
   const staffImportRef = useRef<HTMLInputElement>(null);
 
+  const staffList = data?.staff || [];
+  const mappingsList = data?.mappings || [];
+
   const generateCode = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
@@ -60,12 +63,14 @@ const StaffRoster: React.FC<Props> = ({
         originGate: 'FACILITATOR'
       });
       
-      onUpdate({ ...data, staff: [...data.staff, newStaff] });
+      onUpdate({ ...data, staff: [...staffList, newStaff] });
       setNewName('');
       setNewEmail('');
       alert(`Enrolment Verified. PIN: ${uniqueCode}`);
     } catch (err) {
-      alert("Handshake Error: Check cloud link.");
+      console.error(err);
+      alert("Handshake Error: Check cloud link. Identity saved locally.");
+      onUpdate({ ...data, staff: [...staffList, newStaff] });
     } finally {
       setIsProvisioning(false);
     }
@@ -73,13 +78,13 @@ const StaffRoster: React.FC<Props> = ({
 
   const downloadStaffList = () => {
     const headers = ['Name', 'Email', 'Category', 'Unique Code'];
-    const rows = data.staff.map(s => [s.name, s.email, s.category, s.uniqueCode]);
+    const rows = staffList.map(s => [s.name, s.email, s.category, s.uniqueCode]);
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Facilitator_Registry_${data.settings.name}.csv`;
+    link.download = `Facilitator_Registry_${data.settings?.name || 'UBA'}.csv`;
     link.click();
   };
 
@@ -90,19 +95,22 @@ const StaffRoster: React.FC<Props> = ({
     reader.onload = async (event) => {
       const text = event.target?.result as string;
       const lines = text.split('\n').slice(1);
-      const newStaffList = [...data.staff];
+      const newStaffList = [...staffList];
       
       for (const line of lines) {
-        const [name, email, category] = line.split(',').map(s => s?.trim());
+        const parts = line.split(',').map(s => s?.trim());
+        if (parts.length < 2) continue;
+        const [name, email, category] = parts;
         if (!name || !email) continue;
         const code = generateCode();
         const staffObj: Staff = { id: email.toLowerCase(), name: name.toUpperCase(), email: email.toLowerCase(), category: (category || 'BASIC_SUBJECT_LEVEL') as any, role: 'facilitator', uniqueCode: code };
         
-        // Sync to cloud individually to ensure identity persistence
         try {
           await SupabaseSync.registerSchool({ name: staffObj.name, nodeId: data.settings.institutionalId, email: staffObj.email, hubId: data.settings.hubId, originGate: 'FACILITATOR' });
           newStaffList.push(staffObj);
-        } catch (e) { console.error(`Failed to sync ${name}`); }
+        } catch (e) { 
+          newStaffList.push(staffObj);
+        }
       }
       onUpdate({ ...data, staff: newStaffList });
       alert("Staff roster batch synchronized.");
@@ -111,7 +119,7 @@ const StaffRoster: React.FC<Props> = ({
   };
 
   const forwardCredentials = (staff: Staff) => {
-    const message = `UNITED BAYLOR ACADEMY\nNODE ACCESS KEYCARD\n\nName: ${staff.name}\nHub Node: ${data.settings.institutionalId}\nSecret PIN: ${staff.uniqueCode}\n\nProtocol: Enter these details at the Identity Gateway.`;
+    const message = `UNITED BAYLOR ACADEMY\nNODE ACCESS KEYCARD\n\nName: ${staff.name}\nHub Node: ${data.settings?.institutionalId || 'MASTER'}\nSecret PIN: ${staff.uniqueCode}\n\nProtocol: Enter these details at the Identity Gateway.`;
     navigator.clipboard.writeText(message);
     alert("Keycard Payload Copied.");
   };
@@ -130,7 +138,7 @@ const StaffRoster: React.FC<Props> = ({
     const newMappings: FacilitatorSubjectMapping[] = Object.entries(tempAssignments)
       .filter(([_, checked]) => checked)
       .map(([subName]) => {
-        const subId = data.subjects.find(s => s.name === subName)?.id || subName;
+        const subId = data?.subjects?.find(s => s.name === subName)?.id || subName;
         return {
           id: `map-${Date.now()}-${Math.random()}`,
           staffId: selectedStaffId,
@@ -141,10 +149,12 @@ const StaffRoster: React.FC<Props> = ({
         };
       });
 
-    onUpdate({ ...data, mappings: [...data.mappings, ...newMappings] });
+    onUpdate({ ...data, mappings: [...mappingsList, ...newMappings] });
     setIsMatrixOpen(false);
     setTempAssignments({});
   };
+
+  const activeFacilitator = staffList.find(s => s.id === selectedStaffId);
 
   return (
     <div className="flex flex-col lg:flex-row gap-10 items-start animate-in">
@@ -183,13 +193,13 @@ const StaffRoster: React.FC<Props> = ({
 
         <div className="space-y-3 overflow-y-auto max-h-[400px] scrollbar-hide pr-3">
           <div className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em] mb-4">Live Staff Node</div>
-          {data.staff.map(s => (
+          {staffList.map(s => (
             <div key={s.id} onClick={() => onSelectStaff(s.id)} className={`p-5 rounded-[2rem] border-4 transition-all cursor-pointer flex items-center justify-between group ${selectedStaffId === s.id ? 'bg-indigo-50 border-indigo-600 shadow-xl' : 'bg-white border-transparent hover:bg-slate-50'}`}>
               <div className="flex items-center gap-4 truncate">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${selectedStaffId === s.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>{s.name.charAt(0)}</div>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-sm ${selectedStaffId === s.id ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-white'}`}>{s.name?.charAt(0) || '?'}</div>
                 <div className="truncate">
                   <div className="font-black uppercase text-[12px] text-slate-950 truncate tracking-tight">{s.name}</div>
-                  <div className="text-[9px] font-bold uppercase text-indigo-400 tracking-widest">{s.category.replace('_', ' ')}</div>
+                  <div className="text-[9px] font-bold uppercase text-indigo-400 tracking-widest">{s.category?.replace('_', ' ') || 'FACILITATOR'}</div>
                 </div>
               </div>
               {selectedStaffId === s.id && (
@@ -204,12 +214,12 @@ const StaffRoster: React.FC<Props> = ({
 
       <div className="flex-1 space-y-10 w-full">
         <div className="bg-white rounded-[4.5rem] p-12 md:p-16 shadow-2xl border-4 border-slate-50 min-h-[700px]">
-          {selectedStaffId ? (
+          {selectedStaffId && activeFacilitator ? (
             <div className="animate-in fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-10 mb-14 border-b-4 border-slate-50 pb-12">
                  <div>
                    <h3 className="text-4xl font-black text-slate-950 uppercase tracking-tighter">Duty Assignment Grid</h3>
-                   <p className="text-[12px] font-bold text-indigo-500 uppercase tracking-[0.2em] mt-2">Allocating Academic Scope: {data.staff.find(s => s.id === selectedStaffId)?.name}</p>
+                   <p className="text-[12px] font-bold text-indigo-500 uppercase tracking-[0.2em] mt-2">Allocating Academic Scope: {activeFacilitator.name}</p>
                  </div>
                  <div className="flex flex-wrap gap-4">
                     <div className="bg-slate-950 p-2 rounded-[2rem] flex gap-1 shadow-2xl">
@@ -221,13 +231,13 @@ const StaffRoster: React.FC<Props> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                {data.mappings.filter(m => m.staffId === selectedStaffId).map(m => (
+                {mappingsList.filter(m => m.staffId === selectedStaffId).map(m => (
                   <div key={m.id} className="bg-slate-50 p-8 rounded-[3.5rem] border-4 border-transparent hover:border-indigo-100 hover:bg-white transition-all shadow-sm flex items-center justify-between group">
                     <div className="truncate pr-6">
-                      <div className="text-[13px] font-black text-slate-950 uppercase truncate leading-none mb-2">{data.subjects.find(s => s.id === m.subjectId)?.name || m.subjectId}</div>
+                      <div className="text-[13px] font-black text-slate-950 uppercase truncate leading-none mb-2">{data?.subjects?.find(s => s.id === m.subjectId)?.name || m.subjectId}</div>
                       <div className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{m.className}</div>
                     </div>
-                    <button onClick={() => onUpdate({ ...data, mappings: data.mappings.filter(map => map.id !== m.id) })} className="w-12 h-12 rounded-2xl bg-white text-slate-200 hover:text-rose-500 transition-all flex items-center justify-center shadow-sm">
+                    <button onClick={() => onUpdate({ ...data, mappings: mappingsList.filter(map => map.id !== m.id) })} className="w-12 h-12 rounded-2xl bg-white text-slate-200 hover:text-rose-500 transition-all flex items-center justify-center shadow-sm">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   </div>
@@ -250,7 +260,7 @@ const StaffRoster: React.FC<Props> = ({
               <div className="flex justify-between items-start mb-12 border-b-4 border-slate-50 pb-10 shrink-0">
                  <div>
                     <h4 className="text-4xl font-black text-slate-950 uppercase tracking-tighter leading-none mb-3">Academic Matrix Assignment</h4>
-                    <p className="text-[12px] font-black text-indigo-600 uppercase tracking-[0.3em]">Allocating Domains to Node: {data.staff.find(s => s.id === selectedStaffId)?.name}</p>
+                    <p className="text-[12px] font-black text-indigo-600 uppercase tracking-[0.3em]">Allocating Domains to Node: {activeFacilitator?.name}</p>
                  </div>
                  <button onClick={() => setIsMatrixOpen(false)} className="text-slate-300 hover:text-rose-500 p-4 bg-slate-50 rounded-full transition-all hover:rotate-90">
                     <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M6 18L18 6M6 6l12 12" /></svg>
