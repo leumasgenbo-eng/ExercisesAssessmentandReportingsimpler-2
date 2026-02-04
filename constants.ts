@@ -84,7 +84,7 @@ export const INTERVENTION_ACTIONS = [
 
 export const SCHOOL_HIERARCHY: Record<SchoolGroup, { label: string; classes: string[] }> = {
   DAYCARE: {
-    label: "Daycare",
+    label: "THE Daycare",
     classes: ["Creche 1", "Creche 2", "Nursery 1", "Nursery 2"]
   },
   KINDERGARTEN: {

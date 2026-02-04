@@ -18,7 +18,7 @@ const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 // Mapping user-facing categories to internal SchoolGroup keys for subject lookup
 const CATEGORY_TO_GROUP: Record<string, SchoolGroup> = {
-  "BASIC 7-9": "JHS",
+  "Basic 7-9": "JHS",
   "BASIC 4-6": "UPPER_BASIC",
   "BASIC 1-3": "LOWER_BASIC",
   "SECTION A, B": "LOWER_BASIC",
@@ -85,7 +85,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     setIsProvisioning(true);
     
-    // Use existing uniqueCode if editing, else generate new
     const existing = data.staff.find(s => s.id === editingStaffId);
     const pin = existing?.uniqueCode || Math.floor(100000 + Math.random() * 900000).toString();
     
@@ -118,9 +117,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       
       setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] });
       setEditingStaffId(null);
-      alert(editingStaffId ? "Identity Updated." : `Facilitator Linked Successfully.\nPIN: ${pin}`);
+      alert(editingStaffId ? "Identity Protocol Updated." : `Facilitator Node Established.\nPIN: ${pin}`);
     } catch (e) { 
-      alert("Cloud Handshake Failed. Identity stored locally."); 
+      alert("Cloud Identity Handshake Error. Storing node locally."); 
       const filteredStaff = (data.staff || []).filter(s => s.id !== staffObj.id);
       onUpdateManagement({ ...data, staff: [...filteredStaff, staffObj] });
     } finally { 
@@ -129,7 +128,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const removeStaff = (id: string) => {
-    if (!confirm("CRITICAL: Permanently disconnect this facilitator and wipe all their academic duty mappings?")) return;
+    if (!confirm("CRITICAL: Permanently de-provision this facilitator and purge all duty records?")) return;
     onUpdateManagement({ 
       ...data, 
       staff: (data.staff || []).filter(s => s.id !== id), 
@@ -154,20 +153,20 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setStaffSubTab('ENROLL');
   };
 
-  const downloadCredentialsAsTxt = (staff: Staff) => {
-    const content = `UNITED BAYLOR ACADEMY\nNODE ACCESS KEYCARD\n============================\nLegal Identity: ${staff.name}\nOfficial Email: ${staff.email}\nInstitution: ${data.settings.name}\nNode ID: ${data.settings.institutionalId}\nHub ID: ${data.settings.hubId}\n\nSECRET ACCESS PIN: ${staff.uniqueCode}\n============================\nPROTOCOL: Use these credentials at the Identity Gateway to access your academic terminal. Keep this card confidential.`;
+  const downloadKeycardAsTxt = (staff: Staff) => {
+    const content = `UNITED BAYLOR ACADEMY\nACADEMIC ACCESS KEYCARD\n============================\nLegal Identity: ${staff.name}\nOfficial Email: ${staff.email}\nPrimary Disciplines: ${staff.primaryDiscipline || 'General'}\nNode ID: ${data.settings.institutionalId}\nHub Node: ${data.settings.hubId}\n\nSECRET LOGIN PIN: ${staff.uniqueCode}\n============================\nPROTOCOL: Use these credentials to access your academic terminal. This card is institutional property.`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Access_Card_${staff.name.replace(/\s+/g, '_')}.txt`;
+    link.download = `Keycard_${staff.name.replace(/\s+/g, '_')}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const forwardCredentials = (staff: Staff) => {
-    const subject = encodeURIComponent(`Access Credentials: ${data.settings.name} Academic Node`);
-    const body = encodeURIComponent(`Hello ${staff.name},\n\nYour academic node access for ${data.settings.name} has been provisioned.\n\nNODE ID: ${data.settings.institutionalId}\nHUB ID: ${data.settings.hubId}\nSECRET PIN: ${staff.uniqueCode}\n\nPlease enter these details at the Identity Gateway to start your session.`);
+  const dispatchToEmail = (staff: Staff) => {
+    const subject = encodeURIComponent(`Access Keycard: ${data.settings.name} Academic Terminal`);
+    const body = encodeURIComponent(`Hello ${staff.name},\n\nYour academic node access for ${data.settings.name} has been provisioned.\n\nNODE ID: ${data.settings.institutionalId}\nSECRET PIN: ${staff.uniqueCode}\n\nPlease enter these details at the Identity Gateway to access your Broad Sheet and Lesson Plan tools.`);
     window.location.href = `mailto:${staff.email}?subject=${subject}&body=${body}`;
   };
 
@@ -179,7 +178,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleMassPromotion = () => {
-    if (!confirm("CRITICAL: Promote all pupils to the next academic level? This action modifies the master registry.")) return;
+    if (!confirm("CRITICAL: Execute Promotion Protocol for all pupils? This modifies the master registry across all nodes.")) return;
     
     const newMasterPupils: Record<string, MasterPupilEntry[]> = {};
     const groups = Object.keys(SCHOOL_HIERARCHY) as SchoolGroup[];
@@ -196,7 +195,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     });
 
     onUpdateManagement({ ...data, masterPupils: newMasterPupils });
-    alert("Promotion cycle executed.");
+    alert("Promotion Cycle Completed.");
   };
 
   const handleAssignDuties = () => {
@@ -223,7 +222,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setTempAssignments({});
   };
 
-  // --- TIMETABLE LOGIC ---
   const [activeTimetableStaff, setActiveTimetableStaff] = useState<string | null>(null);
 
   const handleUpdateSchedule = (day: string, period: number, className: string, subject: string) => {
@@ -244,12 +242,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const downloadStaffTemplate = () => {
     const headers = ['Full Name', 'Official Email', 'Teaching Category', 'Primary Discipline'];
-    const csvContent = [headers.join(','), 'JOHN DOE,john@baylor.edu,BASIC_SUBJECT_LEVEL,MATHEMATICS'].join('\n');
+    const csvContent = [headers.join(','), 'JOHN DOE,staff@unitedbaylor.edu,BASIC_SUBJECT_LEVEL,MATHEMATICS'].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Staff_Import_Template.csv`;
+    link.download = `Staff_Provisioning_Template.csv`;
     link.click();
   };
 
@@ -316,10 +314,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                    <div className="flex justify-between items-start mb-8">
                       <h4 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-4">
                         <span className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg">{editingStaffId ? '✏️' : '⚡'}</span>
-                        {editingStaffId ? 'Update Faculty' : 'Direct Enrollment'}
+                        {editingStaffId ? 'Update Faculty Node' : 'Direct Enrollment'}
                       </h4>
                       {editingStaffId && (
-                        <button onClick={() => { setEditingStaffId(null); setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] }); }} className="text-rose-500 font-black text-[10px] uppercase underline">Cancel Edit</button>
+                        <button onClick={() => { setEditingStaffId(null); setNewStaff({ name: '', email: '', displayCategory: 'BASIC 1-3', selectedDisciplines: [] }); }} className="text-rose-500 font-black text-[10px] uppercase underline">Cancel</button>
                       )}
                    </div>
                    <div className="space-y-6">
@@ -338,7 +336,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             value={newStaff.displayCategory} 
                             onChange={(e) => setNewStaff({...newStaff, displayCategory: e.target.value, selectedDisciplines: []})}
                           >
-                            <option value="BASIC 7-9">Basic 7-9</option>
+                            <option value="Basic 7-9">Basic 7-9</option>
                             <option value="BASIC 4-6">BASIC 4-6</option>
                             <option value="BASIC 1-3">BASIC 1-3</option>
                             <option value="SECTION A, B">SECTION A, B</option>
@@ -361,7 +359,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
 
                       <button onClick={addStaff} disabled={isProvisioning} className="w-full bg-indigo-600 text-white py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
-                         {isProvisioning ? 'PROVISIONING...' : (editingStaffId ? 'Confirm Identity Update' : 'Execute faculty Handshake')}
+                         {isProvisioning ? 'SYNCHRONIZING...' : (editingStaffId ? 'Verify Identity Shift' : 'Establish Node Handshake')}
                       </button>
                    </div>
                 </div>
@@ -369,12 +367,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="lg:col-span-7 bg-white rounded-[3rem] p-10 shadow-xl border border-slate-100">
                    <div className="flex justify-between items-center mb-10 border-b-2 border-slate-50 pb-6">
                       <div>
-                        <h4 className="text-2xl font-black uppercase tracking-tight">Active Faculty Registry</h4>
-                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{(data.staff || []).length} Logged Identities</p>
+                        <h4 className="text-2xl font-black uppercase tracking-tight">Academic Faculty Registry</h4>
+                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">{(data.staff || []).length} Verified Nodes</p>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={downloadStaffTemplate} className="bg-slate-50 text-slate-500 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase border border-slate-200">Template 📋</button>
-                        <button onClick={() => staffImportRef.current?.click()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg">Bulk Upload 📥</button>
+                        <button onClick={() => staffImportRef.current?.click()} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg">Bulk Port 📥</button>
                         <input type="file" ref={staffImportRef} className="hidden" accept=".csv" />
                       </div>
                    </div>
@@ -391,10 +389,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                               </div>
                            </div>
                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                              <button onClick={() => downloadCredentialsAsTxt(s)} title="Download Access Card" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-emerald-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
-                              <button onClick={() => forwardCredentials(s)} title="Forward via Email" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-sky-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></button>
-                              <button onClick={() => editStaff(s)} title="Edit Record" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                              <button onClick={() => removeStaff(s.id)} title="Delete Facilitator" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                              <button onClick={() => downloadKeycardAsTxt(s)} title="Notepad Keycard" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-emerald-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
+                              <button onClick={() => dispatchToEmail(s)} title="Forward Creds" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-sky-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></button>
+                              <button onClick={() => editStaff(s)} title="Edit Node" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 hover:text-indigo-600 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                              <button onClick={() => removeStaff(s.id)} title="Delete Node" className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-200 hover:text-rose-500 border border-slate-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                            </div>
                         </div>
                       ))}
@@ -407,8 +405,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
              <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100">
                 <div className="flex justify-between items-end mb-10 border-b-4 border-slate-50 pb-8">
                   <div>
-                    <h4 className="text-3xl font-black uppercase tracking-tight">Duty Allocation Matrix</h4>
-                    <p className="text-indigo-500 font-black text-[10px] uppercase tracking-widest mt-1">Program Subject Specialists or Class Teachers</p>
+                    <h4 className="text-3xl font-black uppercase tracking-tight">Faculty Duty Matrix</h4>
+                    <p className="text-indigo-500 font-black text-[10px] uppercase tracking-widest mt-1">Subject Specialist vs Class Facilitator Assignment</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -418,7 +416,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                            <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center font-black text-lg">{s.name.charAt(0)}</div>
                            <div>
                               <div className="font-black text-slate-900 uppercase text-xs">{s.name}</div>
-                              <div className="text-[8px] font-bold text-slate-400 uppercase">Load: {(data.mappings || []).filter(m => m.staffId === s.id).length} Domains</div>
+                              <div className="text-[8px] font-bold text-slate-400 uppercase">Load: {(data.mappings || []).filter(m => m.staffId === s.id).length} Academic Domains</div>
                            </div>
                         </div>
                         <div className="space-y-2">
@@ -439,13 +437,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
            {staffSubTab === 'TIMETABLE' && (
              <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100 space-y-12">
                 <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                   <h4 className="text-3xl font-black uppercase tracking-tight">Staff Timetable Architect</h4>
+                   <h4 className="text-3xl font-black uppercase tracking-tight">Faculty Timetable Architect</h4>
                    <select 
                     className="bg-slate-900 text-white px-8 py-4 rounded-[2rem] font-black uppercase text-xs outline-none shadow-xl min-w-[300px]"
                     value={activeTimetableStaff || ''}
                     onChange={(e) => setActiveTimetableStaff(e.target.value)}
                    >
-                      <option value="">-- SELECT FACILITATOR --</option>
+                      <option value="">-- SELECT FACILITATOR NODE --</option>
                       {data.staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                    </select>
                 </div>
@@ -453,7 +451,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 {!activeTimetableStaff ? (
                   <div className="py-40 text-center opacity-10 flex flex-col items-center">
                     <div className="text-[10rem]">🗓️</div>
-                    <p className="font-black uppercase tracking-[0.5em] text-sm">Pick a facilitator node to begin scheduling</p>
+                    <p className="font-black uppercase tracking-[0.5em] text-sm">Select a facilitator node to begin temporal mapping</p>
                   </div>
                 ) : (
                   <div className="animate-in fade-in slide-in-from-bottom-4">
@@ -518,7 +516,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
            {staffSubTab === 'SCHEDULE' && (
              <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100 space-y-12">
-                <h4 className="text-3xl font-black uppercase tracking-tight">Institutional Master Schedule</h4>
+                <h4 className="text-3xl font-black uppercase tracking-tight">Institutional Master Schedule Matrix</h4>
                 <div className="overflow-x-auto rounded-[3rem] border-4 border-slate-100 shadow-2xl">
                    <table className="w-full text-left border-collapse min-w-[1200px]">
                       <thead>
@@ -565,12 +563,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="bg-white rounded-[3.5rem] p-10 md:p-14 shadow-xl border border-slate-100 animate-in space-y-12">
            <div className="flex flex-col lg:flex-row justify-between lg:items-end gap-8">
               <div>
-                 <h4 className="text-4xl font-black uppercase tracking-tighter">Pupil Command</h4>
-                 <p className="text-indigo-600 font-black text-xs uppercase tracking-widest mt-2">{totalPupils} Active Entities Transmitting</p>
+                 <h4 className="text-4xl font-black uppercase tracking-tighter">Pupil Registry Control</h4>
+                 <p className="text-indigo-600 font-black text-xs uppercase tracking-widest mt-2">{totalPupils} Active Entities Synced</p>
               </div>
               <div className="flex flex-wrap gap-4">
-                 <button onClick={handleMassPromotion} className="bg-amber-500 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-xl hover:bg-amber-600 transition-all active:scale-95">Mass Promotion ⬆️</button>
-                 <button onClick={() => pupilImportRef.current?.click()} className="bg-slate-950 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-xl hover:bg-black transition-all active:scale-95">Batch Import 📥</button>
+                 <button onClick={handleMassPromotion} className="bg-amber-500 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-xl hover:bg-amber-600 transition-all active:scale-95">Promotion Cycle ⬆️</button>
+                 <button onClick={() => pupilImportRef.current?.click()} className="bg-slate-950 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] shadow-xl hover:bg-black transition-all active:scale-95">Batch Matrix 📥</button>
                  <input type="file" ref={pupilImportRef} className="hidden" accept=".csv" />
               </div>
            </div>
@@ -603,7 +601,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
            <div className="bg-white rounded-[3rem] p-8 md:p-12 w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border-4 border-slate-900">
               <div className="flex justify-between items-start mb-8 shrink-0 border-b-2 border-slate-50 pb-6">
                  <div>
-                    <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Academic Domain Allocation</h4>
+                    <h4 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Academic Domain Allocation Matrix</h4>
                     <div className="flex items-center gap-3 mt-2">
                        <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center text-lg font-black shadow-lg">{activeMappingStaff.name.charAt(0)}</div>
                        <div>
@@ -619,7 +617,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                  {/* LEFT PANE: CONFIGURATION */}
                  <div className="lg:w-3/5 flex flex-col h-full space-y-6">
                     <div className="space-y-2 shrink-0">
-                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block ml-1">Target Department / Class</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block ml-1">Target Department / Class Node</label>
                        <select 
                          className="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl font-black text-slate-950 uppercase text-sm outline-none focus:border-indigo-600 transition-all shadow-inner appearance-none cursor-pointer"
                          value={targetClass}
@@ -653,9 +651,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
                  </div>
 
-                 {/* RIGHT PANE: CURRENT LOAD */}
+                 {/* RIGHT PANE: CURRENT NODE LOAD */}
                  <div className="lg:w-2/5 flex flex-col bg-slate-900 rounded-[2rem] p-6 overflow-hidden">
-                    <h5 className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4 shrink-0">Current Node Load</h5>
+                    <h5 className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4 shrink-0">Active Node Domain Load</h5>
                     <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
                        <div className="space-y-2">
                           {(data.mappings || []).filter(m => m.staffId === activeMappingStaff.id).map((m, idx) => (
@@ -676,7 +674,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div className="mt-8 pt-6 border-t-2 border-slate-50 flex gap-4 shrink-0">
                  <button onClick={() => setActiveMappingStaff(null)} className="flex-1 py-5 border-2 border-slate-100 text-slate-400 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-slate-50 transition-all">Discard</button>
-                 <button onClick={handleAssignDuties} className="flex-[2] bg-slate-950 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all">Confirm Assignments</button>
+                 <button onClick={handleAssignDuties} className="flex-[2] bg-slate-950 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all">Verify Protocol Assignments</button>
               </div>
            </div>
         </div>
